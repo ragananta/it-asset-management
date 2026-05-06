@@ -1,0 +1,201 @@
+/* RESET */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* GLOBAL */
+html, body, #root {
+  height: 100%;
+  font-family: 'Poppins', sans-serif;
+  background: #f5f6fa;
+}
+
+/* CONTAINER */
+.login-container {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  /* 🔥 lebih halus */
+  background: linear-gradient(135deg, #f5f5f5, #e9ecef);
+}
+
+/* CARD */
+.login-card {
+  background: #ffffff;
+  padding: 35px 30px;
+  border-radius: 16px;
+  width: 360px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.08);
+  text-align: center;
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+/* LOGO */
+.logo {
+  width: 110px;
+  margin-bottom: 15px;
+}
+
+/* TITLE */
+.login-card h2 {
+  color: #2e8b57;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+/* SUBTITLE */
+.login-card p {
+  color: #888;
+  font-size: 14px;
+  margin-bottom: 25px;
+}
+
+/* INPUT GROUP */
+.input-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e1e5ea;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 15px;
+  background: #fafafa;
+  transition: 0.2s;
+  gap: 12px;
+}
+
+/* FOCUS EFFECT 🔥 */
+.input-group:focus-within {
+  border-color: #2e8b57;
+  box-shadow: 0 0 0 2px rgba(46,139,87,0.1);
+}
+
+/* ICON */
+.input-group svg {
+  color: #888;
+  flex-shrink: 0;
+}
+
+/* INPUT */
+.input-group input {
+  border: none;
+  outline: none;
+  width: 100%;
+  background: transparent;
+  color: #333;
+  font-size: 14px;
+}
+
+/* EYE ICON */
+.eye {
+  cursor: pointer;
+  margin-left: 6px;
+  display: flex;
+  align-items: center;
+  color: #888;
+}
+
+/* BUTTON */
+button {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 10px;
+  background: #2e8b57;
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+/* BUTTON HOVER */
+button:hover {
+  background: #256f47;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(46,139,87,0.2);
+}
+
+/* BUTTON CLICK */
+button:active {
+  transform: scale(0.98);
+}
+
+/* DISABLED */
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ERROR */
+.error-box {
+  background: #ffe5e5;
+  color: #d60000;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  font-size: 13px;
+}
+
+/* SPINNER */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ANIMATION */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* 🔥 INI FIX */
+  gap: 15px;
+}
+
+.card {
+  background: #1e1e2f;
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.card span {
+  display: block;
+  font-size: 28px;
+  margin-top: 10px;
+}
+
+.layout {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0; /* 🔥 penting */
+}
+
+.main {
+  flex: 1;
+  width: 100%;       /* 🔥 wajib */
+  overflow-x: auto;  /* 🔥 biar tidak ke-cut */
+}
