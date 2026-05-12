@@ -2,81 +2,70 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Models\Log;
+use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use App\Models\MasterUser;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    use ApiResponse;
+
+    public function register(Request $request)
     {
-        // ✅ VALIDASI
         $validated = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string'
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
         ]);
 
-        // ✅ TRIM INPUT (PENTING BANGET)
-        $email = trim($validated['email']);
-        $password = trim($validated['password']);
+        $user = User::create([
+            'name'     => $validated['name'],
+            'email'    => $validated['email'],
+            'password' => Hash::make($validated['password']),
+        ]);
 
-        // ✅ AMBIL USER
-        $user = MasterUser::where('email', $email)->first();
+        $token = $user->createToken('it-asset-token')->plainTextToken;
 
-        // ❌ USER TIDAK ADA
-        if (!$user) {
-            return response()->json([
-                'message' => 'Email tidak terdaftar'
-            ], 404);
-        }
-
-        // ❌ HANDLE PASSWORD RUSAK (NON-BCRYPT)
-        if (!str_starts_with($user->password, '$2y$')) {
-            return response()->json([
-                'message' => 'Password belum terenkripsi (fix database)'
-            ], 500);
-        }
-
-        // ❌ PASSWORD SALAH
-        if (!Hash::check($password, $user->password)) {
-            return response()->json([
-                'message' => 'Password salah'
-            ], 401);
-        }
-
-        // ❌ USER NONAKTIF
-        if ($user->status !== 'Active') {
-            return response()->json([
-                'message' => 'Akun tidak aktif'
-            ], 403);
-        }
-
-        // ✅ HAPUS TOKEN LAMA
-        $user->tokens()->delete();
-
-        // ✅ BUAT TOKEN
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'message' => 'Login success',
+        return $this->createdResponse([
+            'user'  => $user,
             'token' => $token,
-            'user' => $user
-        ]);
+        ], 'Registrasi berhasil');
     }
 
-    public function me(Request $request)
+    public function login(Request $request)
     {
-        return response()->json([
-            'user' => $request->user()
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required',
         ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return $this->errorResponse('Email atau password salah', 401);
+        }
+
+        $user->tokens()->delete();
+
+        $token = $user->createToken('it-asset-token')->plainTextToken;
+
+        return $this->successResponse([
+            'user'  => $user,
+            'token' => $token,
+        ], 'Login berhasil');
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Logout success'
-        ]);
+        return $this->successResponse(null, 'Logout berhasil');
+    }
+
+    public function me(Request $request)
+    {
+        return $this->successResponse($request->user(), 'Data user berhasil diambil');
     }
 }

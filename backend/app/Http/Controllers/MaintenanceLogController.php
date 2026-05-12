@@ -3,101 +3,122 @@
 namespace App\Http\Controllers;
 
 use App\Models\MaintenanceLog;
+use App\Models\MasterAsset;
+use App\Models\Log;
+use App\Traits\ApiResponse;
+use App\Http\Requests\MaintenanceLogRequest;
 use Illuminate\Http\Request;
 
 class MaintenanceLogController extends Controller
 {
-    // GET semua maintenance log
-    public function index()
-    {
-        $logs = MaintenanceLog::with('asset')->get();
+    use ApiResponse;
 
-        return response()->json([
-            'message' => 'List of maintenance logs',
-            'data' => $logs
-        ]);
+    public function index(Request $request)
+    {
+        try {
+            $query = MaintenanceLog::with('asset');
+
+            if ($request->has('asset_id')) {
+                $query->where('asset_id', $request->asset_id);
+            }
+
+            if ($request->has('search')) {
+                $query->where('description', 'like', '%' . $request->search . '%')
+                      ->orWhere('pic', 'like', '%' . $request->search . '%');
+            }
+
+            if ($request->has('date_from') && $request->has('date_to')) {
+                $query->whereBetween('date', [$request->date_from, $request->date_to]);
+            }
+
+            $perPage = $request->get('per_page', 15);
+            $data    = $perPage === 'all' ? $query->get() : $query->paginate($perPage);
+
+            return $this->successResponse($data, 'Data maintenance log berhasil diambil');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
+        }
     }
 
-    // GET detail maintenance log berdasarkan ID
     public function show($id)
     {
-        $log = MaintenanceLog::with('asset')->find($id);
+        try {
+            $log = MaintenanceLog::with('asset')->find($id);
 
-        if (!$log) {
-            return response()->json([
-                'message' => 'Maintenance log not found'
-            ], 404);
+            if (!$log) {
+                return $this->notFoundResponse('Maintenance log tidak ditemukan');
+            }
+
+            return $this->successResponse($log, 'Data maintenance log berhasil diambil');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
-
-        return response()->json([
-            'message' => 'Detail maintenance log',
-            'data' => $log
-        ]);
     }
 
-    // POST tambah maintenance log
-    public function store(Request $request)
+    public function store(MaintenanceLogRequest $request)
     {
-        $request->validate([
-            'asset_id' => 'required|exists:master_assets,id',
-            'maintenance_date' => 'required|date',
-            'maintenance_type' => 'required',
-            'description' => 'nullable',
-            'cost' => 'nullable',
-            'technician' => 'nullable',
-            'status' => 'nullable'
-        ]);
+        try {
+            $asset = MasterAsset::find($request->asset_id);
+            if (!$asset) {
+                return $this->notFoundResponse('Aset tidak ditemukan');
+            }
 
-        $log = MaintenanceLog::create([
-            'asset_id' => $request->asset_id,
-            'maintenance_date' => $request->maintenance_date,
-            'maintenance_type' => $request->maintenance_type,
-            'description' => $request->description,
-            'cost' => $request->cost,
-            'technician' => $request->technician,
-            'status' => $request->status ?? 'Pending',
-        ]);
+            $log = MaintenanceLog::create($request->validated());
 
-        return response()->json([
-            'message' => 'Maintenance log created successfully',
-            'data' => $log
-        ], 201);
+            $this->writeLog($request, 'create_data', "Maintenance log untuk aset '{$asset->asset_name}' berhasil ditambahkan");
+
+            return $this->createdResponse($log->load('asset'), 'Maintenance log berhasil ditambahkan');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
+        }
     }
 
-    // PUT update maintenance log
-    public function update(Request $request, $id)
+    public function update(MaintenanceLogRequest $request, $id)
     {
-        $log = MaintenanceLog::find($id);
+        try {
+            $log = MaintenanceLog::find($id);
 
-        if (!$log) {
-            return response()->json([
-                'message' => 'Maintenance log not found'
-            ], 404);
+            if (!$log) {
+                return $this->notFoundResponse('Maintenance log tidak ditemukan');
+            }
+
+            $log->update($request->validated());
+
+            $this->writeLog($request, 'update_data', "Maintenance log ID {$id} berhasil diperbarui");
+
+            return $this->successResponse($log->fresh()->load('asset'), 'Maintenance log berhasil diperbarui');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
-
-        $log->update($request->all());
-
-        return response()->json([
-            'message' => 'Maintenance log updated successfully',
-            'data' => $log
-        ]);
     }
 
-    // DELETE maintenance log
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $log = MaintenanceLog::find($id);
+        try {
+            $log = MaintenanceLog::find($id);
 
-        if (!$log) {
-            return response()->json([
-                'message' => 'Maintenance log not found'
-            ], 404);
+            if (!$log) {
+                return $this->notFoundResponse('Maintenance log tidak ditemukan');
+            }
+
+            $log->delete();
+
+            $this->writeLog($request, 'delete_data', "Maintenance log ID {$id} berhasil dihapus");
+
+            return $this->successResponse(null, 'Maintenance log berhasil dihapus');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
+    }
 
-        $log->delete();
-
-        return response()->json([
-            'message' => 'Maintenance log deleted successfully'
+    private function writeLog(Request $request, string $activity, string $description): void
+    {
+        Log::create([
+            'user_id'     => $request->user()?->id,
+            'activity'    => $activity,
+            'description' => $description,
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
         ]);
     }
 }

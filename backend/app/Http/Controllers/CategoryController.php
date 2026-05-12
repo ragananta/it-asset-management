@@ -3,89 +3,132 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Log;
+use App\Traits\ApiResponse;
+use App\Http\Requests\CategoryRequest;
 use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
-    // GET semua category
-    public function index()
+    use ApiResponse;
+
+    /**
+     * GET /api/categories
+     */
+    public function index(Request $request)
     {
-        return response()->json([
-            'message' => 'List of categories',
-            'data' => Category::all()
-        ]);
+        try {
+            $query = Category::withCount('assets');
+
+            if ($request->has('search')) {
+                $query->where('name', 'like', '%' . $request->search . '%')
+                      ->orWhere('code', 'like', '%' . $request->search . '%');
+            }
+
+            if ($request->has('is_active')) {
+                $query->where('is_active', $request->boolean('is_active'));
+            }
+
+            $perPage = $request->get('per_page', 15);
+            $data    = $perPage === 'all' ? $query->get() : $query->paginate($perPage);
+
+            return $this->successResponse($data, 'Data kategori berhasil diambil');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
+        }
     }
 
-    // POST tambah category
-    public function store(Request $request)
-    {
-        $request->validate([
-            'category_name' => 'required|string|max:255'
-        ]);
-
-        $category = Category::create($request->all());
-
-        return response()->json([
-            'message' => 'Category created successfully',
-            'data' => $category
-        ], 201);
-    }
-
-    // GET detail category
+    /**
+     * GET /api/categories/{id}
+     */
     public function show($id)
     {
-        $category = Category::find($id);
+        try {
+            $category = Category::withCount('assets')->find($id);
 
-        if (!$category) {
-            return response()->json([
-                'message' => 'Category not found'
-            ], 404);
+            if (!$category) {
+                return $this->notFoundResponse('Kategori tidak ditemukan');
+            }
+
+            return $this->successResponse($category, 'Data kategori berhasil diambil');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
-
-        return response()->json([
-            'message' => 'Category detail',
-            'data' => $category
-        ]);
     }
 
-    // PUT update category
-    public function update(Request $request, $id)
+    /**
+     * POST /api/categories
+     */
+    public function store(CategoryRequest $request)
     {
-        $category = Category::find($id);
+        try {
+            $category = Category::create($request->validated());
 
-        if (!$category) {
-            return response()->json([
-                'message' => 'Category not found'
-            ], 404);
+            $this->writeLog($request, 'create_data', "Kategori '{$category->name}' berhasil ditambahkan");
+
+            return $this->createdResponse($category, 'Kategori berhasil ditambahkan');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
-
-        $request->validate([
-            'category_name' => 'required|string|max:255'
-        ]);
-
-        $category->update($request->all());
-
-        return response()->json([
-            'message' => 'Category updated successfully',
-            'data' => $category
-        ]);
     }
 
-    // DELETE category
-    public function destroy($id)
+    /**
+     * PUT /api/categories/{id}
+     */
+    public function update(CategoryRequest $request, $id)
     {
-        $category = Category::find($id);
+        try {
+            $category = Category::find($id);
 
-        if (!$category) {
-            return response()->json([
-                'message' => 'Category not found'
-            ], 404);
+            if (!$category) {
+                return $this->notFoundResponse('Kategori tidak ditemukan');
+            }
+
+            $category->update($request->validated());
+
+            $this->writeLog($request, 'update_data', "Kategori '{$category->name}' berhasil diperbarui");
+
+            return $this->successResponse($category->fresh(), 'Kategori berhasil diperbarui');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
+    }
 
-        $category->delete();
+    /**
+     * DELETE /api/categories/{id}
+     */
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $category = Category::find($id);
 
-        return response()->json([
-            'message' => 'Category deleted successfully'
+            if (!$category) {
+                return $this->notFoundResponse('Kategori tidak ditemukan');
+            }
+
+            if ($category->assets()->count() > 0) {
+                return $this->errorResponse('Kategori tidak dapat dihapus karena masih memiliki aset', 422);
+            }
+
+            $name = $category->name;
+            $category->delete();
+
+            $this->writeLog($request, 'delete_data', "Kategori '{$name}' berhasil dihapus");
+
+            return $this->successResponse(null, 'Kategori berhasil dihapus');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function writeLog(Request $request, string $activity, string $description): void
+    {
+        Log::create([
+            'user_id'     => $request->user()?->id,
+            'activity'    => $activity,
+            'description' => $description,
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
         ]);
     }
 }

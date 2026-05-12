@@ -5,22 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class AuditLog extends Model
+class Log extends Model
 {
     use HasFactory;
 
-    protected $table = 'audit_logs';
+    protected $table = 'logs';
 
     protected $fillable = [
-        'asset_id',
-        'action',
+        'user_id',
+        'activity',
         'description',
-        'pic',
+        'ip_address',
+        'user_agent',
     ];
 
     // Relationships
-    public function asset()
+    public function user()
     {
-        return $this->belongsTo(MasterAsset::class, 'asset_id');
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

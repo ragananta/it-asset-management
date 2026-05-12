@@ -2,25 +2,41 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Asset;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class MaintenanceLog extends Model
 {
+    use HasFactory, LogsActivity;
+
     protected $table = 'maintenance_logs';
 
     protected $fillable = [
         'asset_id',
-        'maintenance_date',
-        'maintenance_type',
+        'date',
         'description',
         'cost',
-        'technician',
-        'status'
+        'pic',
     ];
 
+    protected $casts = [
+        'date' => 'date',
+        'cost' => 'decimal:2',
+    ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->setDescriptionForEvent(fn(string $eventName) => "Maintenance log has been {$eventName}");
+    }
+
+    // Relationships
     public function asset()
     {
-        return $this->belongsTo(Asset::class, 'asset_id');
+        return $this->belongsTo(MasterAsset::class, 'asset_id');
     }
 }

@@ -5,17 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class AuditLog extends Model
+class AssetProperty extends Model
 {
     use HasFactory;
 
-    protected $table = 'audit_logs';
+    protected $table = 'asset_properties';
 
     protected $fillable = [
         'asset_id',
-        'action',
-        'description',
-        'pic',
+        'property_name',
+        'value',
+        'note',
     ];
 
     // Relationships
