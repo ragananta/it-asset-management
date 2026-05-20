@@ -39,7 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('categories', CategoryController::class);
 
     // Locations
-    // Route::apiResource('locations', LocationController::class); // uncomment jika LocationController dibuat
+    Route::apiResource('locations', LocationController::class);
 
     // Master Assets
     Route::apiResource('assets', MasterAssetController::class);

@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+
+    /* 🔥 TAMBAHAN INI */
+    "ignoreDeprecations": "6.0"
+  }
+}

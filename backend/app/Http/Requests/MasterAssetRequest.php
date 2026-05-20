@@ -20,9 +20,11 @@ class MasterAssetRequest extends FormRequest
         return [
             'asset_code'       => 'required|string|max:100|unique:master_assets,asset_code,' . $id,
             'asset_name'       => 'required|string|max:255',
-            'category_id'      => 'required|exists:categories,id',
+            'category_name'    => 'required|string|max:100',
+
             'location_id'      => 'nullable|exists:locations,id',
-            'assigned_user_id' => 'nullable|exists:users,id',
+            'user_name'        => 'nullable|string|max:100',
+
             'brand'            => 'nullable|string|max:100',
             'model'            => 'nullable|string|max:100',
             'serial_number'    => 'nullable|string|max:100|unique:master_assets,serial_number,' . $id,
@@ -31,6 +33,10 @@ class MasterAssetRequest extends FormRequest
             'purchase_price'   => 'nullable|numeric|min:0',
             'warranty_expired' => 'nullable|date|after_or_equal:purchase_date',
             'condition_status' => 'nullable|in:good,damaged,under_maintenance,retired',
+
+            // ✅ TAMBAHAN: field status
+            'status'           => 'nullable|in:active,borrowed,disposed',
+
             'note'             => 'nullable|string',
         ];
     }
@@ -38,14 +44,14 @@ class MasterAssetRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'asset_code.required'    => 'Kode aset wajib diisi',
-            'asset_code.unique'      => 'Kode aset sudah digunakan',
-            'asset_name.required'    => 'Nama aset wajib diisi',
-            'category_id.required'   => 'Kategori wajib dipilih',
-            'category_id.exists'     => 'Kategori tidak ditemukan',
-            'location_id.exists'     => 'Lokasi tidak ditemukan',
-            'serial_number.unique'   => 'Serial number sudah digunakan',
-            'condition_status.in'    => 'Status kondisi tidak valid. Pilih: good, damaged, under_maintenance, atau retired',
+            'asset_code.required'             => 'Kode aset wajib diisi',
+            'asset_code.unique'               => 'Kode aset sudah digunakan',
+            'asset_name.required'             => 'Nama aset wajib diisi',
+            'category_name.required'          => 'Kategori wajib diisi',
+            'location_id.exists'              => 'Lokasi tidak ditemukan',
+            'serial_number.unique'            => 'Serial number sudah digunakan',
+            'condition_status.in'             => 'Kondisi tidak valid. Pilih: good, damaged, under_maintenance, atau retired',
+            'status.in'                       => 'Status tidak valid. Pilih: active, borrowed, atau disposed',
             'warranty_expired.after_or_equal' => 'Tanggal garansi tidak boleh sebelum tanggal pembelian',
         ];
     }

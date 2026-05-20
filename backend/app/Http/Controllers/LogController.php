@@ -35,8 +35,8 @@ class LogController extends Controller
                       ->whereDate('created_at', '<=', $request->date_to);
             }
 
-            $perPage = $request->get('per_page', 15);
-            $data    = $perPage === 'all' ? $query->get() : $query->paginate($perPage);
+            $perPage = min((int)$request->get('per_page', 15), 50);
+            $data = $query->paginate($perPage);
 
             return $this->successResponse($data, 'Data log aktivitas berhasil diambil');
         } catch (\Exception $e) {

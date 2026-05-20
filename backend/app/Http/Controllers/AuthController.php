@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use App\Models\Log;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -12,6 +11,7 @@ class AuthController extends Controller
 {
     use ApiResponse;
 
+    // ✅ REGISTER
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -28,12 +28,22 @@ class AuthController extends Controller
 
         $token = $user->createToken('it-asset-token')->plainTextToken;
 
+        // 🔥 LOG REGISTER
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'ip' => $request->ip(),
+                'browser' => $request->userAgent()
+            ])
+            ->log('User berhasil registrasi');
+
         return $this->createdResponse([
             'user'  => $user,
             'token' => $token,
         ], 'Registrasi berhasil');
     }
 
+    // ✅ LOGIN
     public function login(Request $request)
     {
         $request->validate([
@@ -47,9 +57,19 @@ class AuthController extends Controller
             return $this->errorResponse('Email atau password salah', 401);
         }
 
+        // hapus token lama (biar 1 device 1 token)
         $user->tokens()->delete();
 
         $token = $user->createToken('it-asset-token')->plainTextToken;
+
+        // 🔥 LOG LOGIN
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'ip' => $request->ip(),
+                'browser' => $request->userAgent()
+            ])
+            ->log('User berhasil login');
 
         return $this->successResponse([
             'user'  => $user,
@@ -57,13 +77,26 @@ class AuthController extends Controller
         ], 'Login berhasil');
     }
 
+    // ✅ LOGOUT
     public function logout(Request $request)
     {
+        $user = $request->user();
+
+        // 🔥 LOG LOGOUT
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'ip' => $request->ip(),
+                'browser' => $request->userAgent()
+            ])
+            ->log('User berhasil logout');
+
         $request->user()->currentAccessToken()->delete();
 
         return $this->successResponse(null, 'Logout berhasil');
     }
 
+    // ✅ GET PROFILE
     public function me(Request $request)
     {
         return $this->successResponse($request->user(), 'Data user berhasil diambil');
