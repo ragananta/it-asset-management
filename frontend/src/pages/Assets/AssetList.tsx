@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
-import { Search, Filter, X } from "lucide-react";
+import { Search, Filter, X, Trash2, Download } from "lucide-react";
 import AssetModal from "../../components/AssetModal";
 
-interface Category { id: number; name: string; }
+interface Category { id: number; name: string; code: string; }
 interface Asset {
   id: number;
   asset_name?: string;
@@ -20,8 +20,15 @@ interface Asset {
   status?: string;
   note?: string;
   category_id?: number;
-  category?: Category;
+  category?: { id: number; name: string };
   assigned_user?: { id: number; name: string };
+  deleted_at?: string | null;
+}
+
+interface Filters {
+  category: string;
+  condition: string;
+  status: string;
 }
 
 const conditionLabel: Record<string, string> = { good: "Good", damaged: "Damaged", under_maintenance: "Maintenance" };
@@ -43,30 +50,39 @@ export default function AssetList() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  // search dengan debounce
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // filter
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterCategory, setFilterCategory] = useState("");
-  const [filterCondition, setFilterCondition] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filters, setFilters] = useState<Filters>({ category: "", condition: "", status: "" });
   const filterRef = useRef<HTMLDivElement>(null);
 
-  // pagination
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // modal
   const [modalOpen, setModalOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
 
-  // ── Debounce search ──────────────────────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [refetchFlag, setRefetchFlag] = useState(0);
+
+  const categoriesFetched = useRef(false);
+  useEffect(() => {
+    if (categoriesFetched.current) return;
+    categoriesFetched.current = true;
+    api.get("/categories?per_page=100").then((res) => {
+      const data = res?.data?.data?.data || res?.data?.data || res?.data || [];
+      setCategories(Array.isArray(data) ? data : []);
+    }).catch(() => {});
+  }, []);
+
   const handleSearchInput = (val: string) => {
     setSearchInput(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -76,7 +92,6 @@ export default function AssetList() {
     }, 400);
   };
 
-  // ── Close filter on outside click ────────────────────────────────────────
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
@@ -87,19 +102,10 @@ export default function AssetList() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Fetch categories sekali untuk dropdown filter ─────────────────────
-  useEffect(() => {
-    api.get("/categories?per_page=all").then((res) => {
-      const data = res?.data?.data?.data || res?.data?.data || res?.data || [];
-      setCategories(Array.isArray(data) ? data : []);
-    }).catch(() => {});
-  }, []);
-
-  // ── SINGLE FETCH EFFECT — dipanggil saat page/rowsPerPage/search/filter berubah ──
   useEffect(() => {
     let cancelled = false;
 
-    const fetch = async () => {
+    const fetchAssets = async () => {
       try {
         setLoading(true);
         const params = new URLSearchParams({
@@ -107,9 +113,9 @@ export default function AssetList() {
           per_page: String(rowsPerPage),
         });
         if (search) params.append("search", search);
-        if (filterCategory) params.append("category_id", filterCategory);
-        if (filterCondition) params.append("condition_status", filterCondition);
-        if (filterStatus) params.append("status", filterStatus);
+        if (filters.category) params.append("category_id", filters.category);
+        if (filters.condition) params.append("condition_status", filters.condition);
+        if (filters.status) params.append("status", filters.status);
 
         const res = await api.get(`/assets?${params}`);
         if (cancelled) return;
@@ -132,17 +138,15 @@ export default function AssetList() {
       }
     };
 
-    fetch();
+    fetchAssets();
     return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search, filterCategory, filterCondition, filterStatus]);
+  }, [currentPage, rowsPerPage, search, filters, refetchFlag]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
-  const activeFilterCount = [filterCategory, filterCondition, filterStatus].filter(Boolean).length;
+  const activeFilterCount = [filters.category, filters.condition, filters.status].filter(Boolean).length;
 
   const resetFilters = () => {
-    setFilterCategory("");
-    setFilterCondition("");
-    setFilterStatus("");
+    setFilters({ category: "", condition: "", status: "" });
     setCurrentPage(1);
     setFilterOpen(false);
   };
@@ -151,10 +155,76 @@ export default function AssetList() {
   const openEdit = (a: Asset) => { setEditAsset(a); setModalOpen(true); };
   const closeModal = () => { setModalOpen(false); setEditAsset(null); };
 
-  const handleSuccess = () => {
-    setCurrentPage(1);
-    setSearch("");
-    setSearchInput("");
+  const handleSuccess = useCallback((updatedAsset?: Asset) => {
+    if (updatedAsset) {
+      setAssets((prev) =>
+        prev.map((item) =>
+          item.id === updatedAsset.id ? { ...item, ...updatedAsset } : item
+        )
+      );
+    } else {
+      setCurrentPage(1);
+      setSearch("");
+      setSearchInput("");
+      setRefetchFlag((f) => f + 1);
+    }
+    setModalOpen(false); // ← langsung set state, tidak panggil closeModal
+    setEditAsset(null);
+  }, []); // ← dependency array kosong, stabil
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const params = new URLSearchParams();
+      if (search) params.append("search", search);
+      if (filters.category) params.append("category_id", filters.category);
+      if (filters.condition) params.append("condition_status", filters.condition);
+      if (filters.status) params.append("status", filters.status);
+
+      const res = await api.get(`/assets/export?${params}`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `data-aset-${Date.now()}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("ERROR export:", err);
+      alert("Gagal export data");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+
+    const prevAssets = assets;
+    const prevTotal = totalData;
+
+    try {
+      setDeleting(true);
+
+      const updatedAssets = assets.filter((item) => item.id !== deleteTarget.id);
+      setAssets(updatedAssets);
+      setTotalData((t) => t - 1);
+
+      const newPage = updatedAssets.length === 0 && currentPage > 1 ? currentPage - 1 : currentPage;
+      setCurrentPage(newPage);
+
+      await api.delete(`/assets/${deleteTarget.id}`);
+      setDeleteTarget(null);
+
+    } catch (err) {
+      console.error("ERROR delete asset:", err);
+      setAssets(prevAssets);
+      setTotalData(prevTotal);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -171,8 +241,10 @@ export default function AssetList() {
             onChange={(e) => handleSearchInput(e.target.value)}
           />
           {searchInput && (
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}>
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -206,16 +278,22 @@ export default function AssetList() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kategori</label>
-                <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  value={filterCategory} onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  value={filters.category}
+                  onChange={(e) => { setFilters((f) => ({ ...f, category: e.target.value })); setCurrentPage(1); }}
+                >
                   <option value="">Semua Kategori</option>
                   {categories.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kondisi</label>
-                <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  value={filterCondition} onChange={(e) => { setFilterCondition(e.target.value); setCurrentPage(1); }}>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  value={filters.condition}
+                  onChange={(e) => { setFilters((f) => ({ ...f, condition: e.target.value })); setCurrentPage(1); }}
+                >
                   <option value="">Semua Kondisi</option>
                   <option value="good">Good</option>
                   <option value="damaged">Damaged</option>
@@ -224,24 +302,42 @@ export default function AssetList() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  value={filters.status}
+                  onChange={(e) => { setFilters((f) => ({ ...f, status: e.target.value })); setCurrentPage(1); }}
+                >
                   <option value="">Semua Status</option>
                   <option value="active">Aktif</option>
                   <option value="borrowed">Dipinjam</option>
                   <option value="disposed">Disposed</option>
                 </select>
               </div>
-              <button onClick={() => setFilterOpen(false)}
-                className="w-full py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
+              <button
+                onClick={() => setFilterOpen(false)}
+                className="w-full py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+              >
                 Terapkan
               </button>
             </div>
           )}
         </div>
 
-        <button onClick={openCreate}
-          className="bg-blue-600 hover:bg-blue-700 transition text-white px-5 py-2.5 rounded-full text-sm font-medium shadow flex items-center gap-2">
+        {/* Export */}
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50"
+        >
+          <Download className="w-4 h-4" />
+          {exporting ? "..." : "Export"}
+        </button>
+
+        {/* Tambah */}
+        <button
+          onClick={openCreate}
+          className="bg-blue-600 hover:bg-blue-700 transition text-white px-5 py-2.5 rounded-full text-sm font-medium shadow flex items-center gap-2"
+        >
           + Tambah
         </button>
       </div>
@@ -250,22 +346,28 @@ export default function AssetList() {
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="text-xs text-gray-400">Filter aktif:</span>
-          {filterCategory && (
+          {filters.category && (
             <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full flex items-center gap-1">
-              {categories.find((c) => String(c.id) === filterCategory)?.name}
-              <button onClick={() => { setFilterCategory(""); setCurrentPage(1); }}><X className="w-3 h-3" /></button>
+              {categories.find((c) => String(c.id) === filters.category)?.name}
+              <button onClick={() => { setFilters((f) => ({ ...f, category: "" })); setCurrentPage(1); }}>
+                <X className="w-3 h-3" />
+              </button>
             </span>
           )}
-          {filterCondition && (
+          {filters.condition && (
             <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-1 rounded-full flex items-center gap-1">
-              {conditionLabel[filterCondition]}
-              <button onClick={() => { setFilterCondition(""); setCurrentPage(1); }}><X className="w-3 h-3" /></button>
+              {conditionLabel[filters.condition]}
+              <button onClick={() => { setFilters((f) => ({ ...f, condition: "" })); setCurrentPage(1); }}>
+                <X className="w-3 h-3" />
+              </button>
             </span>
           )}
-          {filterStatus && (
+          {filters.status && (
             <span className="text-xs bg-teal-50 text-teal-600 px-2 py-1 rounded-full flex items-center gap-1">
-              {statusLabel[filterStatus]}
-              <button onClick={() => { setFilterStatus(""); setCurrentPage(1); }}><X className="w-3 h-3" /></button>
+              {statusLabel[filters.status]}
+              <button onClick={() => { setFilters((f) => ({ ...f, status: "" })); setCurrentPage(1); }}>
+                <X className="w-3 h-3" />
+              </button>
             </span>
           )}
         </div>
@@ -273,25 +375,35 @@ export default function AssetList() {
 
       {/* ROW CONTROL */}
       <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-2">
-          <span>Rows per page</span>
-          <select value={rowsPerPage}
-            onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none">
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-          </select>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span>Rows per page</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+          <span>Page {currentPage} of {totalPages}</span>
         </div>
-        <div>Page {currentPage} of {totalPages}</div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-gray-400 text-sm">
             {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
           </span>
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">‹</button>
-          <button disabled={currentPage === totalPages || totalData === 0} onClick={() => setCurrentPage((p) => p + 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">›</button>
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
+          >‹</button>
+          <button
+            disabled={currentPage === totalPages || totalData === 0}
+            onClick={() => setCurrentPage((p) => p + 1)}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
+          >›</button>
         </div>
       </div>
 
@@ -306,7 +418,7 @@ export default function AssetList() {
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kategori</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kondisi</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Aksi</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[200px]">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -318,8 +430,11 @@ export default function AssetList() {
               </td></tr>
             ) : (
               assets.map((a, idx) => (
-                <tr key={a.id} className="hover:bg-blue-50/30 transition cursor-pointer"
-                  onClick={() => navigate(`/assets/${a.id}`)}>
+                <tr
+                  key={a.id}
+                  className="hover:bg-blue-50/30 transition cursor-pointer"
+                  onClick={() => navigate(`/assets/${a.id}`)}
+                >
                   <td className="px-5 py-4 text-gray-400 text-xs">{startIndex + idx + 1}</td>
                   <td className="px-5 py-4 font-mono text-xs text-gray-700">{a.asset_code || "-"}</td>
                   <td className="px-5 py-4 font-medium text-gray-800">{a.asset_name || "-"}</td>
@@ -338,12 +453,22 @@ export default function AssetList() {
                       {statusLabel[a.status || ""] || a.status || "-"}
                     </span>
                   </td>
-                  <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => navigate(`/assets/${a.id}`)}
-                        className="text-blue-600 text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-full transition">Detail</button>
-                      <button onClick={() => openEdit(a)}
-                        className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-3 py-1 rounded-full transition">Edit</button>
+                  <td className="px-5 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => navigate(`/assets/${a.id}`)}
+                        className="text-blue-600 text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-full transition"
+                      >Detail</button>
+                      <button
+                        onClick={() => openEdit(a)}
+                        className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-3 py-1 rounded-full transition"
+                      >Edit</button>
+                      <button
+                        onClick={() => setDeleteTarget(a)}
+                        className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full flex items-center gap-1 transition"
+                      >
+                        <Trash2 className="w-3 h-3" /> Hapus
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -353,7 +478,43 @@ export default function AssetList() {
         </table>
       </div>
 
-      <AssetModal open={modalOpen} onClose={closeModal} onSuccess={handleSuccess} editAsset={editAsset} />
+      <AssetModal
+        open={modalOpen}
+        onClose={closeModal}
+        onSuccess={handleSuccess}
+        editAsset={editAsset}
+        categories={categories}
+      />
+
+      {/* MODAL DELETE */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-6 py-5 text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Trash2 className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="font-semibold text-gray-800 mb-1">Hapus Aset?</h3>
+              <p className="text-sm text-gray-500">
+                Aset <span className="font-medium text-gray-700">"{deleteTarget.asset_name}"</span> akan dihapus.
+              </p>
+            </div>
+            <div className="px-6 pb-5 flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+              >Batal</button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition disabled:opacity-50"
+              >
+                {deleting ? "Menghapus..." : "Hapus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

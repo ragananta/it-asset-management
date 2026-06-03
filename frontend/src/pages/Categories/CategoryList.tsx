@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
 import { Search, Plus, Pencil, Trash2, X, Check } from "lucide-react";
+import { usePolling } from "../../hooks/usePolling";
 
 interface Category {
   id: number;
@@ -9,6 +10,7 @@ interface Category {
   description?: string;
   is_active: boolean;
   created_at: string;
+  deleted_at?: string | null;
 }
 
 interface CategoryForm {
@@ -25,24 +27,27 @@ export default function CategoryList() {
   const [loading, setLoading] = useState(true);
 
   const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Category | null>(null);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
-  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  // debounce search
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [search, setSearch] = useState("");
+  const triggerRefresh = () => setRefreshKey((k) => k + 1);
 
+  // ── Auto refresh setiap 30 detik ──────────────────────────────────────────
+  usePolling(triggerRefresh, 30000, !modalOpen && !deleteTarget);
+
+  // ── Debounce search ───────────────────────────────────────────────────────
   const handleSearchInput = (val: string) => {
     setSearchInput(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -52,12 +57,11 @@ export default function CategoryList() {
     }, 400);
   };
 
-  // ================= SINGLE FETCH EFFECT =================
-  // Satu useEffect saja — dipanggil saat page, rowsPerPage, atau search berubah
+  // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
-    const fetch = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         const params = new URLSearchParams({
@@ -87,13 +91,13 @@ export default function CategoryList() {
       }
     };
 
-    fetch();
+    fetchData();
     return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search]);
+  }, [currentPage, rowsPerPage, search, refreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
 
-  // ================= MODAL =================
+  // ── Modal ─────────────────────────────────────────────────────────────────
   const openCreate = () => { setEditTarget(null); setForm(emptyForm); setErrors({}); setModalOpen(true); };
   const openEdit = (cat: Category) => {
     setEditTarget(cat);
@@ -103,20 +107,33 @@ export default function CategoryList() {
   };
   const closeModal = () => { setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); };
 
-  // ================= SAVE =================
+  // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     try {
-      setSaving(true);
       setErrors({});
+
       if (editTarget) {
-        await api.put(`/categories/${editTarget.id}`, form);
+        const optimistic: Category = { ...editTarget, ...form };
+        setCategories((prev) =>
+          prev.map((item) => (item.id === editTarget.id ? { ...item, ...optimistic } : item))
+        );
+        closeModal(); // tutup modal langsung
+
+        api.put(`/categories/${editTarget.id}`, form).catch((err) => {
+          triggerRefresh(); // rollback dengan refetch
+          alert(err?.response?.data?.message || "Gagal menyimpan perubahan");
+        });
+
       } else {
-        await api.post("/categories", form);
-        setCurrentPage(1);
+        closeModal(); // tutup modal langsung
+
+        api.post("/categories", form)
+          .then(() => { setCurrentPage(1); triggerRefresh(); })
+          .catch((err) => {
+            alert(err?.response?.data?.message || "Gagal menyimpan kategori");
+          });
       }
-      closeModal();
-      // trigger re-fetch dengan update currentPage (sama page, tapi state baru)
-      setCurrentPage((p) => p);
+
     } catch (err: any) {
       if (err?.response?.data?.errors) {
         const apiErrors: Record<string, string> = {};
@@ -125,30 +142,34 @@ export default function CategoryList() {
         });
         setErrors(apiErrors);
       }
-    } finally {
-      setSaving(false);
     }
   };
 
-  // ================= DELETE =================
+  // ── Delete (soft delete) — optimistic update ──────────────────────────────
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    try {
-      setDeleting(true);
-      await api.delete(`/categories/${deleteTarget.id}`);
-      setDeleteTarget(null);
-      const newPage = categories.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-      setCurrentPage(newPage);
-    } catch (err: any) {
+
+    const prevCategories = categories;
+    const prevTotal = totalData;
+
+    const updated = categories.filter((item) => item.id !== deleteTarget.id);
+    setCategories(updated);
+    setTotalData((t) => t - 1);
+    const newPage = updated.length === 0 && currentPage > 1 ? currentPage - 1 : currentPage;
+    setCurrentPage(newPage);
+    setDeleteTarget(null); // tutup modal langsung
+
+    api.delete(`/categories/${deleteTarget.id}`).catch((err) => {
+      setCategories(prevCategories);
+      setTotalData(prevTotal);
       alert(err?.response?.data?.message || "Gagal menghapus kategori");
-    } finally {
-      setDeleting(false);
-    }
+    });
   };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
 
+      {/* SEARCH + ACTION */}
       <div className="flex justify-end items-center gap-3 mb-5">
         <div className="relative w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -159,41 +180,58 @@ export default function CategoryList() {
             onChange={(e) => handleSearchInput(e.target.value)}
           />
           {searchInput && (
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}>
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-        <button onClick={openCreate}
-          className="bg-blue-600 hover:bg-blue-700 transition text-white px-5 py-2.5 rounded-full text-sm font-medium shadow flex items-center gap-2">
+
+        <button
+          onClick={openCreate}
+          className="bg-blue-600 hover:bg-blue-700 transition text-white px-5 py-2.5 rounded-full text-sm font-medium shadow flex items-center gap-2"
+        >
           <Plus className="w-4 h-4" /> Tambah
         </button>
       </div>
 
+      {/* ROW CONTROL */}
       <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-2">
-          <span>Rows per page</span>
-          <select value={rowsPerPage}
-            onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none">
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-          </select>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span>Rows per page</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+          <span>Page {currentPage} of {totalPages}</span>
         </div>
-        <div>Page {currentPage} of {totalPages}</div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-gray-400 text-sm">
             {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
           </span>
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">‹</button>
-          <button disabled={currentPage === totalPages || totalData === 0} onClick={() => setCurrentPage((p) => p + 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">›</button>
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
+          >‹</button>
+          <button
+            disabled={currentPage === totalPages || totalData === 0}
+            onClick={() => setCurrentPage((p) => p + 1)}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
+          >›</button>
         </div>
       </div>
 
+      {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -229,12 +267,16 @@ export default function CategoryList() {
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-center gap-2">
-                      <button onClick={() => openEdit(cat)}
-                        className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-3 py-1 rounded-full flex items-center gap-1 transition">
+                      <button
+                        onClick={() => openEdit(cat)}
+                        className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-3 py-1 rounded-full flex items-center gap-1 transition"
+                      >
                         <Pencil className="w-3 h-3" /> Edit
                       </button>
-                      <button onClick={() => setDeleteTarget(cat)}
-                        className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full flex items-center gap-1 transition">
+                      <button
+                        onClick={() => setDeleteTarget(cat)}
+                        className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full flex items-center gap-1 transition"
+                      >
                         <Trash2 className="w-3 h-3" /> Hapus
                       </button>
                     </div>
@@ -257,28 +299,41 @@ export default function CategoryList() {
             <div className="px-6 py-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Nama Kategori <span className="text-red-500">*</span></label>
-                <input className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.name ? "border-red-400" : "border-gray-200"}`}
-                  placeholder="contoh: Laptop" value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <input
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.name ? "border-red-400" : "border-gray-200"}`}
+                  placeholder="contoh: Laptop"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
                 {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Kode <span className="text-red-500">*</span></label>
-                <input className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.code ? "border-red-400" : "border-gray-200"}`}
-                  placeholder="contoh: CAT-LPT" value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value })} />
+                <input
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.code ? "border-red-400" : "border-gray-200"}`}
+                  placeholder="contoh: CAT-LPT"
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                />
                 {errors.code && <p className="text-red-500 text-xs mt-1">{errors.code}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi</label>
-                <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
-                  placeholder="Deskripsi singkat kategori..." rows={3} value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <textarea
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+                  placeholder="Deskripsi singkat kategori..."
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-xs font-medium text-gray-600">Status Aktif</label>
-                <button type="button" onClick={() => setForm({ ...form, is_active: !form.is_active })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-teal-500" : "bg-gray-300"}`}>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, is_active: !form.is_active })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-teal-500" : "bg-gray-300"}`}
+                >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_active ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
                 <span className="text-xs text-gray-500">{form.is_active ? "Aktif" : "Nonaktif"}</span>
@@ -286,10 +341,12 @@ export default function CategoryList() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
-              <button onClick={handleSave} disabled={saving}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition disabled:opacity-50 flex items-center gap-2">
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
+              >
                 <Check className="w-4 h-4" />
-                {saving ? "Menyimpan..." : "Simpan"}
+                Simpan
               </button>
             </div>
           </div>
@@ -306,14 +363,19 @@ export default function CategoryList() {
               </div>
               <h3 className="font-semibold text-gray-800 mb-1">Hapus Kategori?</h3>
               <p className="text-sm text-gray-500">
-                Kategori <span className="font-medium text-gray-700">"{deleteTarget.name}"</span> akan dihapus permanen.
+                Apakah anda yakin ingin menghapus Kategori<span className="font-medium text-gray-700">"{deleteTarget.name}"</span>?
               </p>
             </div>
             <div className="px-6 pb-5 flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition disabled:opacity-50">
-                {deleting ? "Menghapus..." : "Hapus"}
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+              >Batal</button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
+              >
+                Hapus
               </button>
             </div>
           </div>

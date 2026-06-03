@@ -47,9 +47,9 @@ export default function Sidebar() {
               to={menu.path}
               className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition
               ${active
-                ? "bg-green-100 text-green-700 font-medium"
-                : "text-gray-600 hover:bg-gray-100"}
-              `}
+  ? "bg-yellow-50 text-yellow-700 font-medium"
+  : "text-gray-600 hover:bg-yellow-50 hover:text-yellow-700"}
+            `}
             >
               <Icon size={18} />
               {menu.name}

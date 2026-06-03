@@ -4,19 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Models\Log;
 use App\Traits\ApiResponse;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class LogController extends Controller
 {
     use ApiResponse;
 
-    /**
-     * GET /api/logs
-     */
     public function index(Request $request)
     {
         try {
-            $query = Log::with('user')->orderBy('created_at', 'desc');
+            $query = Log::with('user:id,name,email')
+                ->orderBy('created_at', 'desc');
 
             if ($request->has('user_id')) {
                 $query->where('user_id', $request->user_id);
@@ -27,16 +27,30 @@ class LogController extends Controller
             }
 
             if ($request->has('search')) {
-                $query->where('description', 'like', '%' . $request->search . '%');
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('description', 'like', "%{$search}%")
+                      ->orWhere('activity', 'like', "%{$search}%")
+                      ->orWhere('ip_address', 'like', "%{$search}%")
+                      ->orWhereHas('user', function ($u) use ($search) {
+                          $u->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                      });
+                });
             }
 
             if ($request->has('date_from') && $request->has('date_to')) {
-                $query->whereDate('created_at', '>=', $request->date_from)
-                      ->whereDate('created_at', '<=', $request->date_to);
+                $query->whereBetween('created_at', [
+                    Carbon::parse($request->date_from)->startOfDay(),
+                    Carbon::parse($request->date_to)->endOfDay(),
+                ]);
             }
 
             $perPage = min((int)$request->get('per_page', 15), 50);
-            $data = $query->paginate($perPage);
+            $cacheKey = 'logs:index:' . md5($request->fullUrl());
+            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage) {
+                return $query->paginate($perPage);
+            });
 
             return $this->successResponse($data, 'Data log aktivitas berhasil diambil');
         } catch (\Exception $e) {
@@ -44,13 +58,10 @@ class LogController extends Controller
         }
     }
 
-    /**
-     * GET /api/logs/{id}
-     */
     public function show($id)
     {
         try {
-            $log = Log::with('user')->find($id);
+            $log = Log::with('user:id,name,email')->find($id);
 
             if (!$log) {
                 return $this->notFoundResponse('Log tidak ditemukan');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Log;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -28,14 +29,14 @@ class AuthController extends Controller
 
         $token = $user->createToken('it-asset-token')->plainTextToken;
 
-        // 🔥 LOG REGISTER
-        activity()
-            ->causedBy($user)
-            ->withProperties([
-                'ip' => $request->ip(),
-                'browser' => $request->userAgent()
-            ])
-            ->log('User berhasil registrasi');
+        // ✅ LOG REGISTER — pakai tabel logs (konsisten dengan controller lain)
+        Log::create([
+            'user_id'     => $user->id,
+            'activity'    => 'register',
+            'description' => "User baru '{$user->name}' berhasil registrasi",
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
+        ]);
 
         return $this->createdResponse([
             'user'  => $user,
@@ -57,19 +58,19 @@ class AuthController extends Controller
             return $this->errorResponse('Email atau password salah', 401);
         }
 
-        // hapus token lama (biar 1 device 1 token)
+        // Hapus token lama (1 device 1 token)
         $user->tokens()->delete();
 
         $token = $user->createToken('it-asset-token')->plainTextToken;
 
-        // 🔥 LOG LOGIN
-        activity()
-            ->causedBy($user)
-            ->withProperties([
-                'ip' => $request->ip(),
-                'browser' => $request->userAgent()
-            ])
-            ->log('User berhasil login');
+        // ✅ LOG LOGIN — pakai tabel logs
+        Log::create([
+            'user_id'     => $user->id,
+            'activity'    => 'login',
+            'description' => "User '{$user->name}' berhasil login",
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
+        ]);
 
         return $this->successResponse([
             'user'  => $user,
@@ -82,14 +83,14 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        // 🔥 LOG LOGOUT
-        activity()
-            ->causedBy($user)
-            ->withProperties([
-                'ip' => $request->ip(),
-                'browser' => $request->userAgent()
-            ])
-            ->log('User berhasil logout');
+        // ✅ LOG LOGOUT — pakai tabel logs
+        Log::create([
+            'user_id'     => $user->id,
+            'activity'    => 'logout',
+            'description' => "User '{$user->name}' berhasil logout",
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
+        ]);
 
         $request->user()->currentAccessToken()->delete();
 

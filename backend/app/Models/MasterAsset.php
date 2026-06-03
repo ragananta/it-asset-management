@@ -14,21 +14,22 @@ class MasterAsset extends Model
     protected $table = 'master_assets';
 
     protected $fillable = [
-        'asset_code',
-        'asset_name',
-        'category_id',
-        'location_id',
-        'assigned_user_id',
-        'brand',
-        'model',
-        'serial_number',
-        'vendor',
-        'purchase_date',
-        'purchase_price',
-        'warranty_expired',
-        'condition_status',
-        'note',
-    ];
+    'asset_code',
+    'asset_name',
+    'category_id',
+    'location_id',
+    'assigned_user_id',
+    'brand',
+    'model',
+    'serial_number',
+    'vendor',
+    'purchase_date',
+    'purchase_price',
+    'warranty_expired',
+    'condition_status',
+    'status',        // ← tambah ini
+    'note',
+];
 
     protected $casts = [
         'purchase_date'   => 'date',

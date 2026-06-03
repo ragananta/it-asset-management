@@ -16,6 +16,7 @@ class AssetAssignment extends Model
     protected $fillable = [
         'asset_id',
         'user_name',
+        'phone',        // ← tambah ini
         'assign_date',
         'return_date',
         'note',
@@ -34,7 +35,6 @@ class AssetAssignment extends Model
             ->setDescriptionForEvent(fn(string $eventName) => "Asset assignment has been {$eventName}");
     }
 
-    // Relationships
     public function asset()
     {
         return $this->belongsTo(MasterAsset::class, 'asset_id');

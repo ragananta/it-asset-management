@@ -12,10 +12,12 @@ return new class extends Migration
             $table->id();
             $table->foreignId('asset_id')->constrained('master_assets')->onDelete('cascade');
             $table->string('user_name');
+            $table->string('phone')->nullable();
             $table->date('assign_date');
             $table->date('return_date')->nullable();
             $table->text('note')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

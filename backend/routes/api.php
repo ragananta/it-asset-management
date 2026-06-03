@@ -9,6 +9,8 @@ use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AssetAssignmentController;
 use App\Http\Controllers\LogController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LocationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,11 +43,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Locations
     Route::apiResource('locations', LocationController::class);
 
+    // Export Master Assets
+    Route::get('/assets/export', [MasterAssetController::class, 'export']);
+
     // Master Assets
     Route::apiResource('assets', MasterAssetController::class);
 
     // Asset Properties
     Route::apiResource('asset-properties', AssetPropertyController::class);
+
+    // Export Maintenance Logs
+    Route::get('/maintenance-logs/export', [MaintenanceLogController::class, 'export']);
 
     // Maintenance Logs
     Route::apiResource('maintenance-logs', MaintenanceLogController::class);
@@ -53,10 +61,26 @@ Route::middleware('auth:sanctum')->group(function () {
     // Audit Logs
     Route::apiResource('audit-logs', AuditLogController::class);
 
+    // Export Asset Assignments
+    Route::get('/asset-assignments/export', [AssetAssignmentController::class, 'export']);
+
     // Asset Assignments
     Route::apiResource('asset-assignments', AssetAssignmentController::class);
 
     // Logs (read-only)
     Route::get('logs',      [LogController::class, 'index']);
     Route::get('logs/{id}', [LogController::class, 'show']);
+
+    // Restore Category (soft delete)
+    Route::post('/categories/{id}/restore', [CategoryController::class, 'restore']);
+
+    // Tanpa perlu use statement
+    Route::get('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'index']);
+    
+    // Export Dashboard Data
+    Route::get('/dashboard/export', [DashboardController::class, 'export']);
+
+    // Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
 });

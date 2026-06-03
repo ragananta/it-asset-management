@@ -15,23 +15,28 @@ class AuditLogController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = AuditLog::with('asset');
+            $query = AuditLog::with('asset:id,asset_name,asset_code')
+                ->select(['id', 'asset_id', 'action', 'description', 'pic', 'created_at'])
+                ->orderBy('created_at', 'desc');
 
-            if ($request->has('asset_id')) {
+            if ($request->filled('asset_id')) {
                 $query->where('asset_id', $request->asset_id);
             }
 
-            if ($request->has('action')) {
+            if ($request->filled('action')) {
                 $query->where('action', $request->action);
             }
 
-            if ($request->has('search')) {
-                $query->where('description', 'like', '%' . $request->search . '%')
-                      ->orWhere('pic', 'like', '%' . $request->search . '%');
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('description', 'like', "%{$search}%")
+                      ->orWhere('pic', 'like', "%{$search}%");
+                });
             }
 
-            $perPage = $request->get('per_page', 15);
-            $data    = $perPage === 'all' ? $query->get() : $query->paginate($perPage);
+            $perPage = min((int) $request->get('per_page', 15), 100);
+            $data    = $query->paginate($perPage);
 
             return $this->successResponse($data, 'Data audit log berhasil diambil');
         } catch (\Exception $e) {

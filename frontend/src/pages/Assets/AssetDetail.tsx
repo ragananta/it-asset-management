@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import {
@@ -7,12 +7,32 @@ import {
   Pencil, Trash2, X, Check,
 } from "lucide-react";
 
+interface Category { id: number; name: string; }
+interface AssignedUser { id: number; name: string; }
 interface Property {
   id: number;
   asset_id: number;
   property_name: string;
   value: string;
   note?: string;
+}
+interface Asset {
+  id: number;
+  asset_name: string;
+  asset_code: string;
+  brand?: string;
+  model?: string;
+  serial_number?: string;
+  vendor?: string;
+  purchase_date?: string;
+  purchase_price?: number;
+  warranty_expired?: string;
+  condition_status?: string;
+  status?: string;
+  note?: string;
+  category?: Category;
+  assigned_user?: AssignedUser;
+  properties?: Property[];
 }
 
 interface PropertyForm {
@@ -44,37 +64,36 @@ export default function AssetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [asset, setAsset] = useState<any>(null);
+  const [asset, setAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
 
   // property modal
   const [propModalOpen, setPropModalOpen] = useState(false);
   const [propEditTarget, setPropEditTarget] = useState<Property | null>(null);
   const [propForm, setPropForm] = useState<PropertyForm>(emptyPropForm);
-  const [propSaving, setPropSaving] = useState(false);
   const [propErrors, setPropErrors] = useState<Record<string, string>>({});
 
   // delete property
   const [propDeleteTarget, setPropDeleteTarget] = useState<Property | null>(null);
-  const [propDeleting, setPropDeleting] = useState(false);
 
-  // ================= FETCH =================
-  const fetchDetail = async () => {
+  // ── Fetch ─────────────────────────────────────────────────────────────────
+  const fetchDetail = useCallback(async () => {
+    if (!id) return;
     try {
       setLoading(true);
-      if (!id) return;
       const res = await api.get(`/assets/${id}`);
       setAsset(res.data.data || res.data);
     } catch (err) {
       console.error(err);
+      setAsset(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { fetchDetail(); }, [id]);
+  useEffect(() => { fetchDetail(); }, [fetchDetail]);
 
-  // ================= PROPERTY MODAL =================
+  // ── Property modal ────────────────────────────────────────────────────────
   const openPropCreate = () => {
     setPropEditTarget(null);
     setPropForm(emptyPropForm);
@@ -84,11 +103,7 @@ export default function AssetDetail() {
 
   const openPropEdit = (prop: Property) => {
     setPropEditTarget(prop);
-    setPropForm({
-      property_name: prop.property_name,
-      value: prop.value,
-      note: prop.note || "",
-    });
+    setPropForm({ property_name: prop.property_name, value: prop.value, note: prop.note || "" });
     setPropErrors({});
     setPropModalOpen(true);
   };
@@ -100,10 +115,9 @@ export default function AssetDetail() {
     setPropErrors({});
   };
 
-  // ================= SAVE PROPERTY =================
+  // ── Save property ─────────────────────────────────────────────────────────
   const handlePropSave = async () => {
     try {
-      setPropSaving(true);
       setPropErrors({});
 
       const payload = {
@@ -114,13 +128,32 @@ export default function AssetDetail() {
       };
 
       if (propEditTarget) {
-        await api.put(`/asset-properties/${propEditTarget.id}`, payload);
+        // Optimistic update
+        setAsset((prev) => prev ? {
+          ...prev,
+          properties: prev.properties?.map((p) =>
+            p.id === propEditTarget.id ? { ...p, ...propForm } : p
+          ),
+        } : prev);
+
+        closePropModal(); // tutup modal langsung
+        api.put(`/asset-properties/${propEditTarget.id}`, payload)
+          .then(() => fetchDetail()) // refresh di background
+          .catch((err) => {
+            alert(err?.response?.data?.message || "Gagal menyimpan perubahan");
+            fetchDetail();
+          });
+
       } else {
-        await api.post("/asset-properties", payload);
+        closePropModal(); // tutup modal langsung
+        api.post("/asset-properties", payload)
+          .then(() => fetchDetail()) // refresh di background
+          .catch((err) => {
+            alert(err?.response?.data?.message || "Gagal menyimpan property");
+            fetchDetail();
+          });
       }
 
-      await fetchDetail();
-      closePropModal();
     } catch (err: any) {
       if (err?.response?.data?.errors) {
         const apiErrors: Record<string, string> = {};
@@ -129,42 +162,44 @@ export default function AssetDetail() {
         });
         setPropErrors(apiErrors);
       }
-    } finally {
-      setPropSaving(false);
     }
   };
 
-  // ================= DELETE PROPERTY =================
+  // ── Delete property ───────────────────────────────────────────────────────
   const handlePropDelete = async () => {
     if (!propDeleteTarget) return;
-    try {
-      setPropDeleting(true);
-      await api.delete(`/asset-properties/${propDeleteTarget.id}`);
-      await fetchDetail();
-      setPropDeleteTarget(null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setPropDeleting(false);
-    }
+
+    // Optimistic — hapus langsung dari UI
+    setAsset((prev) => prev ? {
+      ...prev,
+      properties: prev.properties?.filter((p) => p.id !== propDeleteTarget.id),
+    } : prev);
+    setPropDeleteTarget(null);
+
+    // Request di background
+    api.delete(`/asset-properties/${propDeleteTarget.id}`)
+      .catch(() => {
+        alert("Gagal menghapus property");
+        fetchDetail(); // rollback
+      });
   };
 
-  // ================= FORMAT =================
-  const formatDate = (val: string) => {
+  // ── Format helpers ────────────────────────────────────────────────────────
+  const formatDate = (val?: string) => {
     if (!val) return "-";
     return new Date(val).toLocaleDateString("id-ID", {
       day: "2-digit", month: "long", year: "numeric",
     });
   };
 
-  const formatCurrency = (val: number | string) => {
+  const formatCurrency = (val?: number | string) => {
     if (!val) return "-";
     return new Intl.NumberFormat("id-ID", {
       style: "currency", currency: "IDR", maximumFractionDigits: 0,
     }).format(Number(val));
   };
 
-  // ================= LOADING / NOT FOUND =================
+  // ── Loading / not found ───────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -189,7 +224,7 @@ export default function AssetDetail() {
   return (
     <div className="min-h-screen bg-gray-50 p-6 space-y-5">
 
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -217,15 +252,13 @@ export default function AssetDetail() {
         </div>
       </div>
 
-      {/* ================= INFO UTAMA ================= */}
+      {/* INFO UTAMA */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
           <Package className="w-4 h-4 text-blue-500" />
           Informasi Aset
         </h2>
-
         <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-
           <InfoRow icon={<Tag />} label="Kategori" value={asset.category?.name} />
           <InfoRow icon={<User />} label="Pengguna" value={asset.assigned_user?.name} />
           <InfoRow
@@ -237,9 +270,7 @@ export default function AssetDetail() {
           <InfoRow icon={<DollarSign />} label="Harga Beli" value={formatCurrency(asset.purchase_price)} />
           <InfoRow icon={<Calendar />} label="Tanggal Beli" value={formatDate(asset.purchase_date)} />
           <InfoRow icon={<Calendar />} label="Garansi Sampai" value={formatDate(asset.warranty_expired)} />
-
         </div>
-
         {asset.note && (
           <div className="mt-5 pt-5 border-t border-gray-100">
             <p className="text-xs text-gray-400 mb-1">Catatan</p>
@@ -248,14 +279,14 @@ export default function AssetDetail() {
         )}
       </div>
 
-      {/* ================= ASSET PROPERTIES ================= */}
+      {/* ASSET PROPERTIES */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             <Hash className="w-4 h-4 text-purple-500" />
             Asset Properties
             <span className="text-xs text-gray-400 font-normal ml-1">
-              ({asset.properties?.length || 0} item)
+              ({asset.properties?.length ?? 0} item)
             </span>
           </h2>
           <button
@@ -276,12 +307,11 @@ export default function AssetDetail() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {asset.properties.map((prop: Property) => (
+            {asset.properties.map((prop) => (
               <div
                 key={prop.id}
                 className="flex items-start justify-between bg-gray-50 rounded-xl px-4 py-3 border border-gray-100"
               >
-                {/* Kiri: info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 mb-0.5">{prop.property_name}</p>
                   <p className="text-sm font-medium text-gray-800">{prop.value}</p>
@@ -289,22 +319,18 @@ export default function AssetDetail() {
                     <p className="text-xs text-gray-400 mt-0.5 italic">{prop.note}</p>
                   )}
                 </div>
-
-                {/* Kanan: tombol edit & hapus — selalu terlihat */}
                 <div className="flex items-center gap-1 ml-3 shrink-0">
                   <button
                     onClick={() => openPropEdit(prop)}
                     className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition"
                   >
-                    <Pencil className="w-3 h-3" />
-                    Edit
+                    <Pencil className="w-3 h-3" /> Edit
                   </button>
                   <button
                     onClick={() => setPropDeleteTarget(prop)}
                     className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition"
                   >
-                    <Trash2 className="w-3 h-3" />
-                    Hapus
+                    <Trash2 className="w-3 h-3" /> Hapus
                   </button>
                 </div>
               </div>
@@ -313,11 +339,10 @@ export default function AssetDetail() {
         )}
       </div>
 
-      {/* ================= MODAL ADD/EDIT PROPERTY ================= */}
+      {/* MODAL ADD/EDIT PROPERTY */}
       {propModalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-800">
                 {propEditTarget ? `Edit Property — ${propEditTarget.property_name}` : "Tambah Property"}
@@ -326,9 +351,7 @@ export default function AssetDetail() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <div className="px-6 py-5 space-y-4">
-
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Nama Property <span className="text-red-500">*</span>
@@ -344,7 +367,6 @@ export default function AssetDetail() {
                   <p className="text-red-500 text-xs mt-1">{propErrors.property_name}</p>
                 )}
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Value <span className="text-red-500">*</span>
@@ -360,11 +382,9 @@ export default function AssetDetail() {
                   <p className="text-red-500 text-xs mt-1">{propErrors.value}</p>
                 )}
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Catatan
-                  <span className="text-gray-400 font-normal ml-1">(opsional)</span>
+                  Catatan <span className="text-gray-400 font-normal">(opsional)</span>
                 </label>
                 <input
                   type="text"
@@ -374,9 +394,7 @@ export default function AssetDetail() {
                   onChange={(e) => setPropForm({ ...propForm, note: e.target.value })}
                 />
               </div>
-
             </div>
-
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button
                 onClick={closePropModal}
@@ -386,18 +404,17 @@ export default function AssetDetail() {
               </button>
               <button
                 onClick={handlePropSave}
-                disabled={propSaving}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
               >
                 <Check className="w-4 h-4" />
-                {propSaving ? "Menyimpan..." : propEditTarget ? "Simpan Perubahan" : "Simpan"}
+                {propEditTarget ? "Simpan Perubahan" : "Simpan"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ================= MODAL DELETE PROPERTY ================= */}
+      {/* MODAL DELETE PROPERTY */}
       {propDeleteTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
@@ -421,10 +438,9 @@ export default function AssetDetail() {
               </button>
               <button
                 onClick={handlePropDelete}
-                disabled={propDeleting}
-                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition disabled:opacity-50"
+                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
               >
-                {propDeleting ? "Menghapus..." : "Hapus"}
+                Hapus
               </button>
             </div>
           </div>
@@ -435,8 +451,7 @@ export default function AssetDetail() {
   );
 }
 
-// ─── Helper component ────────────────────────────────────────────────────────
-
+// ── Helper component ──────────────────────────────────────────────────────────
 function InfoRow({
   icon, label, value, mono,
 }: {

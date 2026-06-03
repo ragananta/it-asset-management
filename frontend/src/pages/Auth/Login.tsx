@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { User, Key, Eye, EyeOff, Monitor } from "lucide-react";
 
@@ -7,6 +8,8 @@ const SALOKA_GREEN_DARK  = "#228A5A";
 const SALOKA_GREEN_LIGHT = "#E8F7F1";
 
 export default function Login() {
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,7 +19,7 @@ export default function Login() {
       setLoading(true);
       const res = await api.post("/auth/login", form);
       localStorage.setItem("token", res.data.data.token);
-      window.location.href = "/dashboard";
+      navigate("/dashboard"); // ← tidak reload halaman
     } catch (err: any) {
       alert(err.response?.data?.message || "Login gagal");
     } finally {

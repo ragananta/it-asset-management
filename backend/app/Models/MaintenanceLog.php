@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
 class MaintenanceLog extends Model
 {
-    use HasFactory, LogsActivity;
+    use HasFactory, SoftDeletes, LogsActivity;
 
     protected $table = 'maintenance_logs';
 
@@ -19,6 +20,7 @@ class MaintenanceLog extends Model
         'description',
         'cost',
         'pic',
+        'status',
     ];
 
     protected $casts = [
@@ -34,7 +36,6 @@ class MaintenanceLog extends Model
             ->setDescriptionForEvent(fn(string $eventName) => "Maintenance log has been {$eventName}");
     }
 
-    // Relationships
     public function asset()
     {
         return $this->belongsTo(MasterAsset::class, 'asset_id');

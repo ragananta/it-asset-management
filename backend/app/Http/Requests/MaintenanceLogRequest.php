@@ -18,6 +18,7 @@ class MaintenanceLogRequest extends FormRequest
             'description' => 'required|string',
             'cost'        => 'nullable|numeric|min:0',
             'pic'         => 'required|string|max:255',
+            'status'      => 'nullable|in:ongoing,completed',
         ];
     }
 
@@ -29,6 +30,7 @@ class MaintenanceLogRequest extends FormRequest
             'date.required'        => 'Tanggal maintenance wajib diisi',
             'description.required' => 'Deskripsi maintenance wajib diisi',
             'pic.required'         => 'PIC wajib diisi',
+            'status.in'            => 'Status harus ongoing atau completed',
         ];
     }
 

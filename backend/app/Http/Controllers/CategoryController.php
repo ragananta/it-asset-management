@@ -7,6 +7,7 @@ use App\Models\Log;
 use App\Traits\ApiResponse;
 use App\Http\Requests\CategoryRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CategoryController extends Controller
 {
@@ -18,19 +19,28 @@ class CategoryController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Category::withCount('assets');
+            // Tampilkan data terhapus (soft deleted) kalau trashed=true
+            $query = $request->boolean('trashed')
+                ? Category::onlyTrashed()->withCount('assets')
+                : Category::withCount('assets');
 
-            if ($request->has('search')) {
-                $query->where('name', 'like', '%' . $request->search . '%')
-                      ->orWhere('code', 'like', '%' . $request->search . '%');
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('code', 'like', "%{$search}%");
+                });
             }
 
-            if ($request->has('is_active')) {
+            if ($request->filled('is_active')) {
                 $query->where('is_active', $request->boolean('is_active'));
             }
 
-            $perPage = $request->get('per_page', 15);
-            $data    = $perPage === 'all' ? $query->get() : $query->paginate($perPage);
+            $perPage = min((int) $request->get('per_page', 15), 100);
+            $cacheKey = 'categories:index:' . md5($request->fullUrl());
+            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage) {
+                return $query->paginate($perPage);
+            });
 
             return $this->successResponse($data, 'Data kategori berhasil diambil');
         } catch (\Exception $e) {
@@ -95,7 +105,7 @@ class CategoryController extends Controller
     }
 
     /**
-     * DELETE /api/categories/{id}
+     * DELETE /api/categories/{id} — soft delete
      */
     public function destroy(Request $request, $id)
     {
@@ -111,11 +121,33 @@ class CategoryController extends Controller
             }
 
             $name = $category->name;
-            $category->delete();
+            $category->delete(); // soft delete — data tidak hilang permanen
 
             $this->writeLog($request, 'delete_data', "Kategori '{$name}' berhasil dihapus");
 
             return $this->successResponse(null, 'Kategori berhasil dihapus');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * POST /api/categories/{id}/restore — pulihkan soft deleted
+     */
+    public function restore(Request $request, $id)
+    {
+        try {
+            $category = Category::onlyTrashed()->find($id);
+
+            if (!$category) {
+                return $this->notFoundResponse('Kategori tidak ditemukan');
+            }
+
+            $category->restore();
+
+            $this->writeLog($request, 'update_data', "Kategori '{$category->name}' berhasil dipulihkan");
+
+            return $this->successResponse($category, 'Kategori berhasil dipulihkan');
         } catch (\Exception $e) {
             return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }

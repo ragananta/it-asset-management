@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
-import { Search, ActivitySquare, Monitor, Globe } from "lucide-react";
+import { Search, ActivitySquare, Monitor, Globe, X, Filter } from "lucide-react";
 
 interface User {
   id: number;
@@ -19,7 +19,12 @@ interface ActivityLog {
   user?: User;
 }
 
-// ================= CONFIG =================
+interface Filters {
+  activity: string;
+  date_from: string;
+  date_to: string;
+}
+
 const activityLabel: Record<string, string> = {
   login:       "Login",
   logout:      "Logout",
@@ -50,74 +55,112 @@ const activityIcon: Record<string, string> = {
 export default function ActivityLogList() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
 
-  // pagination
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalData, setTotalData] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // detail modal
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<Filters>({ activity: "", date_from: "", date_to: "" });
+  const filterRef = useRef<HTMLDivElement>(null);
+
   const [detailLog, setDetailLog] = useState<ActivityLog | null>(null);
 
-  // ================= FETCH =================
-  const fetchLogs = async () => {
-    try {
-      setLoading(true);
-      const res = await api.get("/logs?per_page=all");
-      const data =
-        res?.data?.data?.data ||
-        res?.data?.data ||
-        res?.data ||
-        [];
-      setLogs(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("ERROR fetch logs:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  // ================= FILTER =================
-  const filtered = logs.filter((l) => {
-    const keyword = search.toLowerCase();
-    return (
-      (l.user?.name || "").toLowerCase().includes(keyword) ||
-      (l.user?.email || "").toLowerCase().includes(keyword) ||
-      (l.activity || "").toLowerCase().includes(keyword) ||
-      (l.description || "").toLowerCase().includes(keyword) ||
-      (l.ip_address || "").toLowerCase().includes(keyword)
-    );
-  });
-
-  // ================= PAGINATION =================
-  const totalData = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(totalData / rowsPerPage));
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const endIndex = Math.min(startIndex + rowsPerPage, totalData);
-  const paginatedData = filtered.slice(startIndex, endIndex);
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [totalPages]);
-
-  // ================= FORMAT =================
-  const formatDate = (val: string) => {
-    if (!val) return "-";
-    return new Date(val).toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+  // ── expand deskripsi per row ─────────────────────────────────────────────
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const toggleRow = (id: number) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   };
 
-  const getLabel = (val: string) =>
-    activityLabel[val] || val;
+  const activeFilterCount = [filters.activity, filters.date_from, filters.date_to].filter(Boolean).length;
+
+  // ── Debounce search ───────────────────────────────────────────────────────
+  const handleSearchInput = (val: string) => {
+    setSearchInput(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setSearch(val);
+      setCurrentPage(1);
+    }, 400);
+  };
+
+  // ── Close filter on outside click ─────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const resetFilters = () => {
+    setFilters({ activity: "", date_from: "", date_to: "" });
+    setCurrentPage(1);
+    setFilterOpen(false);
+  };
+
+  // ── Fetch logs ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          per_page: String(rowsPerPage),
+        });
+        if (search) params.append("search", search);
+        if (filters.activity) params.append("activity", filters.activity);
+        if (filters.date_from) params.append("date_from", filters.date_from);
+        if (filters.date_to) params.append("date_to", filters.date_to);
+
+        const res = await api.get(`/logs?${params}`);
+        if (cancelled) return;
+
+        const payload = res?.data?.data;
+        if (payload?.data) {
+          setLogs(payload.data);
+          setTotalData(payload.total);
+          setTotalPages(payload.last_page);
+        } else {
+          const data = Array.isArray(payload) ? payload : [];
+          setLogs(data);
+          setTotalData(data.length);
+          setTotalPages(1);
+        }
+      } catch (err) {
+        if (!cancelled) console.error("ERROR fetch logs:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchData();
+    return () => { cancelled = true; };
+  }, [currentPage, rowsPerPage, search, filters]);
+
+  const startIndex = (currentPage - 1) * rowsPerPage;
+
+  const formatDate = (val: string) => {
+    if (!val) return "-";
+    return new Date(val).toLocaleDateString("id-ID", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  };
+
+  const getLabel = (val: string) => activityLabel[val] || val;
 
   const getBrowser = (ua: string) => {
     if (!ua) return "-";
@@ -132,47 +175,156 @@ export default function ActivityLogList() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
 
-      {/* ================= HEADER INFO ================= */}
+      {/* HEADER INFO */}
       <div className="flex items-center gap-2 mb-5">
         <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
           <ActivitySquare className="w-4 h-4 text-indigo-600" />
         </div>
-        <div>
-          <p className="text-xs text-gray-400">Dicatat otomatis oleh sistem · Read only</p>
-        </div>
+        <p className="text-xs text-gray-400">Dicatat otomatis oleh sistem · Read only</p>
       </div>
 
-      {/* ================= SEARCH ================= */}
+      {/* SEARCH + FILTER */}
       <div className="flex justify-end items-center gap-3 mb-5">
-        <div className="relative w-72">
+
+        {/* Search */}
+        <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
-            placeholder="Cari user, aktivitas, IP..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            placeholder="Cari user, IP..."
+            className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+            value={searchInput}
+            onChange={(e) => handleSearchInput(e.target.value)}
           />
+          {searchInput && (
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Button */}
+        <div className="relative" ref={filterRef}>
+          <button
+            onClick={() => setFilterOpen((v) => !v)}
+            className={`relative w-10 h-10 flex items-center justify-center rounded-full shadow transition ${
+              activeFilterCount > 0 ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-indigo-500 text-white hover:bg-indigo-600"
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {filterOpen && (
+            <div className="absolute right-0 top-12 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-700">Filter Log</p>
+                {activeFilterCount > 0 && (
+                  <button onClick={resetFilters} className="text-xs text-red-500 hover:underline flex items-center gap-1">
+                    <X className="w-3 h-3" /> Reset semua
+                  </button>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Aktivitas</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  value={filters.activity}
+                  onChange={(e) => { setFilters((f) => ({ ...f, activity: e.target.value })); setCurrentPage(1); }}
+                >
+                  <option value="">Semua Aktivitas</option>
+                  <option value="login">Login</option>
+                  <option value="logout">Logout</option>
+                  <option value="register">Register</option>
+                  <option value="create_data">Tambah Data</option>
+                  <option value="update_data">Ubah Data</option>
+                  <option value="delete_data">Hapus Data</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Dari</label>
+                <input type="date"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  value={filters.date_from}
+                  onChange={(e) => { setFilters((f) => ({ ...f, date_from: e.target.value })); setCurrentPage(1); }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Sampai</label>
+                <input type="date"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  value={filters.date_to}
+                  onChange={(e) => { setFilters((f) => ({ ...f, date_to: e.target.value })); setCurrentPage(1); }}
+                />
+              </div>
+              <button
+                onClick={() => setFilterOpen(false)}
+                className="w-full py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition"
+              >
+                Terapkan
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ================= ROW CONTROL ================= */}
-      <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-2">
-          <span>Rows per page</span>
-          <select
-            value={rowsPerPage}
-            onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-          </select>
+      {/* ACTIVE FILTER CHIPS */}
+      {activeFilterCount > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="text-xs text-gray-400">Filter aktif:</span>
+          {filters.activity && (
+            <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full flex items-center gap-1">
+              {activityLabel[filters.activity] || filters.activity}
+              <button onClick={() => { setFilters((f) => ({ ...f, activity: "" })); setCurrentPage(1); }}>
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filters.date_from && (
+            <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full flex items-center gap-1">
+              Dari: {filters.date_from}
+              <button onClick={() => { setFilters((f) => ({ ...f, date_from: "" })); setCurrentPage(1); }}>
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filters.date_to && (
+            <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full flex items-center gap-1">
+              Sampai: {filters.date_to}
+              <button onClick={() => { setFilters((f) => ({ ...f, date_to: "" })); setCurrentPage(1); }}>
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
         </div>
-        <div>Page {currentPage} of {totalPages}</div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs">
-            {totalData === 0 ? "0" : `${startIndex + 1}–${endIndex} of ${totalData}`}
+      )}
+
+      {/* ROW CONTROL */}
+      <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span>Rows per page</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+          <span>Page {currentPage} of {totalPages}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-gray-400 text-sm">
+            {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
           </span>
           <button
             disabled={currentPage === 1}
@@ -187,148 +339,113 @@ export default function ActivityLogList() {
         </div>
       </div>
 
-      {/* ================= TABLE ================= */}
+      {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12">
-                NO
-              </th>
-
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[240px]">
-                USER
-              </th>
-
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[160px]">
-                AKTIVITAS
-              </th>
-
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                DESKRIPSI
-              </th>
-
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[140px]">
-                IP ADDRESS
-              </th>
-
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[140px]">
-                BROWSER
-              </th>
-
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[180px]">
-                WAKTU
-              </th>
-
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[120px]">
-                DETAIL
-              </th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12">NO</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[220px]">User</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[150px]">Aktivitas</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Deskripsi</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[130px]">IP Address</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[110px]">Browser</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[160px]">Waktu</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[100px]">Detail</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr>
-                <td colSpan={8} className="py-16 text-center text-gray-400">Loading...</td>
-              </tr>
-            ) : paginatedData.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-16 text-center text-gray-300">Data aktivitas belum tersedia</td>
-              </tr>
+              <tr><td colSpan={8} className="py-16 text-center text-gray-400">Loading...</td></tr>
+            ) : logs.length === 0 ? (
+              <tr><td colSpan={8} className="py-16 text-center text-gray-300">
+                {search || activeFilterCount > 0 ? "Tidak ada data yang cocok" : "Data aktivitas belum tersedia"}
+              </td></tr>
             ) : (
-              paginatedData.map((log, idx) => (
-                <tr key={log.id} className="hover:bg-blue-50/30 transition">
-                  <td className="px-5 py-4 text-gray-400 text-xs">{startIndex + idx + 1}</td>
-
-                  {/* User */}
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-semibold uppercase">
-                        {(log.user?.name || "?").charAt(0)}
+              logs.map((log, idx) => {
+                const isExpanded = expandedRows.has(log.id);
+                return (
+                  <tr
+                    key={log.id}
+                    className="hover:bg-blue-50/30 transition cursor-pointer"
+                    onClick={() => toggleRow(log.id)}
+                  >
+                    <td className="px-5 py-4 text-gray-400 text-xs">{startIndex + idx + 1}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-semibold uppercase shrink-0">
+                          {(log.user?.name || "?").charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-gray-800 text-sm font-medium truncate">{log.user?.name || "-"}</p>
+                          <p className="text-gray-400 text-xs truncate">{log.user?.email || "-"}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-gray-800 text-sm font-medium">{log.user?.name || "-"}</p>
-                        <p className="text-gray-400 text-xs">{log.user?.email || "-"}</p>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <span className={`inline-flex items-center justify-center min-w-[110px] text-xs px-2 py-1 rounded-full font-medium ${activityColor[log.activity] || "text-gray-600 bg-gray-100"}`}>
+                        <span className="mr-1">{activityIcon[log.activity] || "•"}</span>
+                        {getLabel(log.activity)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-gray-500 text-xs">
+                      {/* ── Expand/collapse deskripsi ── */}
+                      <p className={isExpanded ? "whitespace-pre-wrap leading-relaxed" : "line-clamp-2 leading-relaxed"}>
+                        {log.description || "-"}
+                      </p>
+                      {log.description && log.description.length > 80 && (
+                        <span className="text-indigo-400 text-xs mt-0.5 block">
+                          {isExpanded ? "↑ Tutup" : "↓ Selengkapnya"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
+                        <Globe className="w-3 h-3 text-gray-400 shrink-0" />
+                        <span className="truncate">{log.ip_address || "-"}</span>
                       </div>
-                    </div>
-                  </td>
-
-                  {/* Aktivitas */}
-                  <td className="px-5 py-4 align-middle text-center">
-                    <span
-                      className={`inline-flex items-center justify-center min-w-[120px] text-xs px-2 py-1 rounded-full font-medium ${
-                        activityColor[log.activity] || "text-gray-600 bg-gray-100"
-                      }`}
-                    >
-                      <span className="mr-1">{activityIcon[log.activity] || "•"}</span>
-                      {getLabel(log.activity)}
-                    </span>
-                  </td>
-
-                  {/* Deskripsi */}
-                  <td className="px-5 py-4 text-gray-500 text-xs max-w-xs">
-                    <p className="line-clamp-2">{log.description || "-"}</p>
-                  </td>
-
-                  {/* IP */}
-                  <td className="px-5 py-4 text-center">
-                    <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
-                      <Globe className="w-3 h-3 text-gray-400" />
-                      {log.ip_address || "-"}
-                    </div>
-                  </td>
-
-                  {/* Browser */}
-                  <td className="px-5 py-4 text-center">
-                    <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
-                      <Monitor className="w-3 h-3 text-gray-400" />
-                      {getBrowser(log.user_agent)}
-                    </div>
-                  </td>
-
-                  {/* Waktu */}
-                  <td className="px-5 py-4 text-gray-400 text-xs whitespace-nowrap text-center">
-                    {formatDate(log.created_at)}
-                  </td>
-
-                  {/* Detail */}
-                  <td className="px-5 py-4 align-middle">
-                    <div className="flex items-center justify-center">
-                      <button
-                        onClick={() => setDetailLog(log)}
-                        className="text-indigo-600 text-xs bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition"
-                      >
-                        Lihat
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
+                        <Monitor className="w-3 h-3 text-gray-400 shrink-0" />
+                        {getBrowser(log.user_agent)}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-gray-400 text-xs whitespace-nowrap text-center">
+                      {formatDate(log.created_at)}
+                    </td>
+                    <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center">
+                        <button
+                          onClick={() => setDetailLog(log)}
+                          className="text-indigo-600 text-xs bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition"
+                        >
+                          Lihat
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
 
-      {/* ================= MODAL DETAIL ================= */}
+      {/* MODAL DETAIL */}
       {detailLog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <ActivitySquare className="w-4 h-4 text-indigo-500" />
                 <h2 className="font-semibold text-gray-800">Detail Aktivitas</h2>
               </div>
-              <button
-                onClick={() => setDetailLog(null)}
-                className="text-gray-400 hover:text-gray-600 transition text-lg leading-none"
-              >✕</button>
+              <button onClick={() => setDetailLog(null)} className="text-gray-400 hover:text-gray-600 transition">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-
-            {/* Body */}
             <div className="px-6 py-5 space-y-4">
-
-              {/* User */}
               <div className="flex items-center gap-3 bg-indigo-50 rounded-xl p-3">
                 <div className="w-10 h-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 text-sm font-bold uppercase">
                   {(detailLog.user?.name || "?").charAt(0)}
@@ -338,49 +455,37 @@ export default function ActivityLogList() {
                   <p className="text-xs text-gray-500">{detailLog.user?.email || "-"}</p>
                 </div>
               </div>
-
-              {/* Info rows */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">Aktivitas</span>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    activityColor[detailLog.activity] || "text-gray-600 bg-gray-100"
-                  }`}>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${activityColor[detailLog.activity] || "text-gray-600 bg-gray-100"}`}>
                     {getLabel(detailLog.activity)}
                   </span>
                 </div>
-
                 <div className="flex justify-between items-start text-sm gap-4">
                   <span className="text-gray-400 shrink-0">Deskripsi</span>
                   <span className="text-gray-700 text-right text-xs">{detailLog.description || "-"}</span>
                 </div>
-
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">IP Address</span>
                   <span className="text-gray-700 font-mono text-xs">{detailLog.ip_address || "-"}</span>
                 </div>
-
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">Browser</span>
                   <span className="text-gray-700 text-xs">{getBrowser(detailLog.user_agent)}</span>
                 </div>
-
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">Waktu</span>
                   <span className="text-gray-700 text-xs">{formatDate(detailLog.created_at)}</span>
                 </div>
               </div>
-
-              {/* User Agent full */}
               <div>
                 <p className="text-xs text-gray-400 mb-1">User Agent</p>
                 <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 break-all leading-relaxed">
                   {detailLog.user_agent || "-"}
                 </p>
               </div>
-
             </div>
-
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
               <button
                 onClick={() => setDetailLog(null)}
@@ -389,11 +494,9 @@ export default function ActivityLogList() {
                 Tutup
               </button>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }
