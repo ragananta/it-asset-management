@@ -15,12 +15,14 @@ class MasterAssetRequest extends FormRequest
 
     public function rules(): array
     {
-        $id = $this->route('asset') ?? $this->route('id');
+        $asset = $this->route('asset') ?? $this->route('id');
+        $id = is_object($asset) ? $asset->id : $asset;
 
         return [
-            'asset_code'       => 'required|string|max:100|unique:master_assets,asset_code,' . $id,
+            'asset_code'       => 'nullable|string|max:100|unique:master_assets,asset_code,' . $id,
             'asset_name'       => 'required|string|max:255',
-            'category_name'    => 'required|string|max:100',
+            'category_id'      => 'required|exists:categories,id',
+            'category_name'    => 'nullable|string|max:100',
 
             'location_id'      => 'nullable|exists:locations,id',
             'user_name'        => 'nullable|string|max:100',
@@ -44,10 +46,10 @@ class MasterAssetRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'asset_code.required'             => 'Kode aset wajib diisi',
             'asset_code.unique'               => 'Kode aset sudah digunakan',
             'asset_name.required'             => 'Nama aset wajib diisi',
-            'category_name.required'          => 'Kategori wajib diisi',
+            'category_id.required'            => 'Kategori wajib dipilih',
+            'category_id.exists'              => 'Kategori tidak ditemukan',
             'location_id.exists'              => 'Lokasi tidak ditemukan',
             'serial_number.unique'            => 'Serial number sudah digunakan',
             'condition_status.in'             => 'Kondisi tidak valid. Pilih: good, damaged, under_maintenance, atau retired',

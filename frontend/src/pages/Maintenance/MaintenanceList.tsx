@@ -2,7 +2,9 @@ import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
 import { useAssets } from "../../context/AssetsContext";
 import { usePolling } from "../../hooks/usePolling";
-import { Search, Plus, Pencil, Trash2, X, Check, Wrench, Download, Filter } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, Wrench, Download, Filter, LockKeyhole } from "lucide-react";
+import TablePagination from "../../components/pagination/TablePagination";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
 interface Asset {
   id: number;
@@ -19,6 +21,7 @@ interface MaintenanceLog {
   pic: string;
   status: "ongoing" | "completed";
   asset?: Asset;
+  created_at?: string;
   deleted_at?: string | null;
 }
 
@@ -41,6 +44,19 @@ const STATUS_OPTIONS = [
   { value: "completed", label: "Selesai",     activeClass: "bg-teal-500 text-white border-teal-500" },
 ];
 
+const sortNewestFirst = (items: MaintenanceLog[]) =>
+  [...items].sort((a, b) => {
+    const dateA = new Date(a.date || a.created_at || 0).getTime();
+    const dateB = new Date(b.date || b.created_at || 0).getTime();
+    if (dateA !== dateB) return dateB - dateA;
+
+    const createdA = new Date(a.created_at || 0).getTime();
+    const createdB = new Date(b.created_at || 0).getTime();
+    if (createdA !== createdB) return createdB - createdA;
+
+    return b.id - a.id;
+  });
+
 export default function MaintenanceList() {
   const { assets, ensureAssets } = useAssets();
 
@@ -56,7 +72,7 @@ export default function MaintenanceList() {
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -122,24 +138,24 @@ export default function MaintenanceList() {
         if (payload?.logs) {
           const logsData = payload.logs;
           if (logsData?.data) {
-            setLogs(logsData.data);
+            setLogs(sortNewestFirst(logsData.data));
             setTotalData(logsData.total);
             setTotalPages(logsData.last_page);
           } else {
-            setLogs(Array.isArray(logsData) ? logsData : []);
+            setLogs(sortNewestFirst(Array.isArray(logsData) ? logsData : []));
             setTotalData(logsData?.length || 0);
             setTotalPages(1);
           }
           setTotalCost(payload.total_cost || 0);
         } else if (payload?.data) {
           // Fallback struktur lama
-          setLogs(payload.data);
+          setLogs(sortNewestFirst(payload.data));
           setTotalData(payload.total);
           setTotalPages(payload.last_page);
           setTotalCost(0);
         } else {
           const data = Array.isArray(payload) ? payload : [];
-          setLogs(data); setTotalData(data.length); setTotalPages(1);
+          setLogs(sortNewestFirst(data)); setTotalData(data.length); setTotalPages(1);
           setTotalCost(0);
         }
       } catch (err) {
@@ -191,6 +207,7 @@ export default function MaintenanceList() {
   };
 
   const openEdit = (log: MaintenanceLog) => {
+    if (log.status === "completed") return;
     ensureAssets();
     setEditTarget(log);
     setForm({
@@ -204,28 +221,38 @@ export default function MaintenanceList() {
   const closeModal = () => { setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); };
 
   const handleSave = async () => {
+    if (editTarget?.status === "completed") {
+      setErrors({ status: "Maintenance yang sudah selesai tidak dapat diedit." });
+      return;
+    }
+
+    const target = editTarget;
+
     try {
       setErrors({});
       const payload = { ...form, asset_id: Number(form.asset_id), cost: Number(form.cost) };
 
       closeModal(); // ← tutup modal langsung
 
-      if (editTarget) {
-        const res = await api.put(`/maintenance-logs/${editTarget.id}`, payload);
-        const updated: MaintenanceLog = res?.data?.data || { ...editTarget, ...payload };
-        setLogs((prev) => prev.map((item) => item.id === editTarget.id ? { ...item, ...updated } : item));
+      if (target) {
+        const res = await api.put(`/maintenance-logs/${target.id}`, payload);
+        const updated: MaintenanceLog = res?.data?.data || { ...target, ...payload };
+        setLogs((prev) => sortNewestFirst(prev.map((item) => item.id === target.id ? { ...item, ...updated } : item)));
       } else {
         await api.post("/maintenance-logs", payload);
         setCurrentPage(1); triggerRefresh();
       }
     } catch (err: any) {
       setModalOpen(true); // buka modal lagi kalau error
+      setEditTarget(target);
       if (err?.response?.data?.errors) {
         const apiErrors: Record<string, string> = {};
         Object.entries(err.response.data.errors).forEach(([key, val]) => {
           apiErrors[key] = Array.isArray(val) ? (val as string[])[0] : String(val);
         });
         setErrors(apiErrors);
+      } else {
+        setErrors({ form: err?.response?.data?.message || "Gagal menyimpan maintenance" });
       }
     }
   };
@@ -286,12 +313,25 @@ export default function MaintenanceList() {
         {/* Kanan: Filter tanggal + Search + Export + Tambah */}
         <div className="flex items-center gap-2">
 
-          {/* Filter tanggal */}
-          <div className="relative" ref={filterRef}>
+          {/* Search + Filter tanggal */}
+          <div className="relative w-80" ref={filterRef}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              placeholder="Cari maintenance..."
+              className="w-full pl-9 pr-20 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+              value={searchInput}
+              onChange={(e) => handleSearchInput(e.target.value)}
+            />
+            {searchInput && (
+              <button className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               onClick={() => setFilterOpen((v) => !v)}
-              className={`relative w-10 h-10 flex items-center justify-center rounded-full shadow transition ${
-                activeFilterCount > 0 ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"
+              className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full shadow transition ${
+                activeFilterCount > 0 ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-teal-500 text-white hover:bg-teal-600"
               }`}
             >
               <Filter className="w-4 h-4" />
@@ -336,23 +376,6 @@ export default function MaintenanceList() {
             )}
           </div>
 
-          {/* Search */}
-          <div className="relative w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              placeholder="Cari maintenance..."
-              className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
-              value={searchInput}
-              onChange={(e) => handleSearchInput(e.target.value)}
-            />
-            {searchInput && (
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}>
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
           {/* Export */}
           <button
             onClick={handleExport}
@@ -372,43 +395,28 @@ export default function MaintenanceList() {
       </div>
 
       {/* ROW CONTROL */}
-      <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span>Rows per page</span>
-            <select value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none">
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-          <span>Page {currentPage} of {totalPages}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-gray-400 text-sm">
-            {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
-          </span>
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">‹</button>
-          <button disabled={currentPage === totalPages || totalData === 0} onClick={() => setCurrentPage((p) => p + 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">›</button>
-        </div>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        rowsPerPage={rowsPerPage}
+        totalData={totalData}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        onRowsPerPageChange={setRowsPerPage}
+      />
 
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm min-w-[860px]">
+        <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-10">No</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Aset</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[100px]">Tanggal</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Deskripsi</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase w-[120px]">Biaya</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[90px]">PIC</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[110px]">Status</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[120px]">Aksi</th>
+              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[4%]">No</th>
+              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[16%]">Aset</th>
+              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[9%]">Tanggal</th>
+              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[23%]">Deskripsi</th>
+              <th className="px-3 py-4 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[12%]">Biaya</th>
+              <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[8%]">PIC</th>
+              <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[11%]">Status</th>
+              <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[17%]">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -420,29 +428,29 @@ export default function MaintenanceList() {
               </td></tr>
             ) : (
               logs.map((log, idx) => (
-                <tr key={log.id} className={`hover:bg-blue-50/20 transition ${log.status === "completed" ? "opacity-60" : ""}`}>
-                  <td className="px-4 py-3.5 text-gray-400 text-xs">{startIndex + idx + 1}</td>
-                  <td className="px-4 py-3.5">
+                <tr key={log.id} className={`transition ${log.status === "completed" ? "bg-gray-50/60 hover:bg-gray-50" : "hover:bg-blue-50/20"}`}>
+                  <td className="px-3 py-4 text-gray-400 text-xs align-middle">{startIndex + idx + 1}</td>
+                  <td className="px-3 py-4 align-middle">
                     {log.asset ? (
-                      <div>
-                        <p className="font-medium text-gray-800 text-sm leading-tight">{log.asset.asset_name}</p>
-                        <p className="text-xs text-gray-400 font-mono mt-0.5">{log.asset.asset_code}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-800 text-sm leading-tight truncate">{log.asset.asset_name}</p>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5 truncate">{log.asset.asset_code}</p>
                       </div>
                     ) : <span className="text-gray-400 text-xs">-</span>}
                   </td>
-                  <td className="px-4 py-3.5 text-gray-600 text-xs whitespace-nowrap">{formatDate(log.date)}</td>
-                  <td className="px-4 py-3.5 text-gray-600 text-xs">
+                  <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap align-middle">{formatDate(log.date)}</td>
+                  <td className="px-3 py-4 text-gray-600 text-xs align-middle">
                     <p className="line-clamp-2 leading-relaxed">{log.description || "-"}</p>
                   </td>
-                  <td className="px-4 py-3.5 text-gray-700 text-xs font-medium whitespace-nowrap text-right">
+                  <td className="px-3 py-4 text-gray-700 text-xs font-medium whitespace-nowrap text-right align-middle">
                     {log.cost ? formatCurrency(log.cost) : <span className="text-gray-300">-</span>}
                   </td>
-                  <td className="px-4 py-3.5 text-center">
-                    <span className="inline-flex items-center justify-center text-xs text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full max-w-[80px] truncate">
+                  <td className="px-3 py-4 text-center align-middle">
+                    <span className="inline-flex max-w-full items-center justify-center text-xs text-purple-700 bg-purple-50 px-2 py-1 rounded-full truncate">
                       {log.pic || "-"}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 text-center">
+                  <td className="px-3 py-4 text-center align-middle">
                     <span className={`inline-flex items-center justify-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${
                       log.status === "completed" ? "text-teal-700 bg-teal-50" : "text-amber-700 bg-amber-50"
                     }`}>
@@ -450,14 +458,24 @@ export default function MaintenanceList() {
                       {log.status === "completed" ? "Selesai" : "Berlangsung"}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <button onClick={() => openEdit(log)}
-                        className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition">
-                        <Pencil className="w-3 h-3" /> Edit
-                      </button>
+                  <td className="px-3 py-4 align-middle">
+                    <div className="grid grid-cols-[74px_66px] items-center justify-center gap-2">
+                      {log.status === "completed" ? (
+                        <button
+                          disabled
+                          title="Maintenance yang sudah selesai tidak dapat diedit"
+                          className="w-full text-gray-400 text-xs bg-gray-100 px-2 py-1 rounded-full flex items-center justify-center gap-1 cursor-not-allowed whitespace-nowrap"
+                        >
+                          <LockKeyhole className="w-3 h-3" /> Terkunci
+                        </button>
+                      ) : (
+                        <button onClick={() => openEdit(log)}
+                          className="w-full text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2 py-1 rounded-full flex items-center justify-center gap-1 transition whitespace-nowrap">
+                          <Pencil className="w-3 h-3" /> Edit
+                        </button>
+                      )}
                       <button onClick={() => setDeleteTarget(log)}
-                        className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition">
+                        className="w-full text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2 py-1 rounded-full flex items-center justify-center gap-1 transition whitespace-nowrap">
                         <Trash2 className="w-3 h-3" /> Hapus
                       </button>
                     </div>
@@ -486,20 +504,32 @@ export default function MaintenanceList() {
 
       {/* MODAL CREATE/EDIT */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-[2px] flex items-center justify-center z-50 px-4 py-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden border border-white/80">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
               <div className="flex items-center gap-2">
-                <Wrench className="w-4 h-4 text-gray-500" />
-                <h2 className="font-semibold text-gray-800">
-                  {editTarget ? "Edit Maintenance" : "Tambah Maintenance"}
-                </h2>
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-gray-900">
+                    {editTarget ? "Edit Maintenance" : "Tambah Maintenance"}
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {editTarget ? "Perbarui detail maintenance yang masih berlangsung" : "Catat maintenance aset baru"}
+                  </p>
+                </div>
               </div>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 transition">
+              <button onClick={closeModal} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[calc(92vh-145px)]">
+              {errors.form && (
+                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {errors.form}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Aset <span className="text-red-500">*</span></label>
                 <select
@@ -526,7 +556,7 @@ export default function MaintenanceList() {
                   onChange={(e) => setForm({ ...form, description: e.target.value })} />
                 {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description}</p>}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Biaya (Rp)</label>
                   <input type="number"
@@ -562,13 +592,14 @@ export default function MaintenanceList() {
                       </button>
                     ))}
                   </div>
+                  {errors.status && <p className="text-red-500 text-xs mt-1">{errors.status}</p>}
                 </div>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
               <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
               <button onClick={handleSave}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2">
+                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2 shadow-sm">
                 <Check className="w-4 h-4" />
                 Simpan
               </button>

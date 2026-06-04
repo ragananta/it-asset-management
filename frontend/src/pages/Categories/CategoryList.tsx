@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
-import { Search, Plus, Pencil, Trash2, X, Check } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, Tag } from "lucide-react";
 import { usePolling } from "../../hooks/usePolling";
+import TablePagination from "../../components/pagination/TablePagination";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
 interface Category {
   id: number;
@@ -22,13 +24,20 @@ interface CategoryForm {
 
 const emptyForm: CategoryForm = { name: "", code: "", description: "", is_active: true };
 
+const squish = (value: string) => value.trim().replace(/\s+/g, " ");
+const normalizeName = (value: string) =>
+  squish(value).toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+const normalizeCode = (value: string) => squish(value).toUpperCase();
+const comparable = (value: string) => squish(value).toLowerCase();
+
 export default function CategoryList() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -36,9 +45,12 @@ export default function CategoryList() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalClosing, setModalClosing] = useState(false);
   const [editTarget, setEditTarget] = useState<Category | null>(null);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
@@ -67,6 +79,7 @@ export default function CategoryList() {
         const params = new URLSearchParams({
           page: String(currentPage),
           per_page: String(rowsPerPage),
+          simple: "1",
         });
         if (search) params.append("search", search);
 
@@ -76,8 +89,9 @@ export default function CategoryList() {
         const payload = res?.data?.data;
         if (payload?.data) {
           setCategories(payload.data);
-          setTotalData(payload.total);
-          setTotalPages(payload.last_page);
+          const fallbackTotal = currentPage * rowsPerPage + (payload.next_page_url ? rowsPerPage : 0);
+          setTotalData(payload.total ?? fallbackTotal);
+          setTotalPages(payload.last_page ?? (payload.next_page_url ? currentPage + 1 : currentPage));
         } else {
           const data = Array.isArray(payload) ? payload : [];
           setCategories(data);
@@ -96,41 +110,135 @@ export default function CategoryList() {
   }, [currentPage, rowsPerPage, search, refreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
+  const duplicateSource = allCategories.length > 0 ? allCategories : categories;
+  const duplicateName = form.name.trim()
+    ? duplicateSource.find((cat) =>
+        cat.id !== editTarget?.id && comparable(cat.name) === comparable(form.name)
+      )
+    : null;
+  const duplicateCode = form.code.trim()
+    ? duplicateSource.find((cat) =>
+        cat.id !== editTarget?.id && comparable(cat.code) === comparable(form.code)
+      )
+    : null;
+  const nameError = duplicateName ? "Nama kategori sudah digunakan." : errors.name;
+  const codeError = duplicateCode ? "Kode kategori sudah digunakan." : errors.code;
+  const isFormValid = Boolean(form.name.trim() && form.code.trim() && !duplicateName && !duplicateCode);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusTimer = window.setTimeout(() => nameInputRef.current?.focus(), 80);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") requestCloseModal();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [modalOpen]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    let cancelled = false;
+    api.get("/categories?per_page=500")
+      .then((res) => {
+        if (cancelled) return;
+        const payload = res?.data?.data;
+        setAllCategories(payload?.data || (Array.isArray(payload) ? payload : categories));
+      })
+      .catch(() => {
+        if (!cancelled) setAllCategories(categories);
+      });
+
+    return () => { cancelled = true; };
+  }, [modalOpen, categories]);
 
   // ── Modal ─────────────────────────────────────────────────────────────────
-  const openCreate = () => { setEditTarget(null); setForm(emptyForm); setErrors({}); setModalOpen(true); };
+  const openCreate = () => {
+    setModalClosing(false);
+    setEditTarget(null); setForm(emptyForm); setErrors({}); setModalOpen(true);
+  };
   const openEdit = (cat: Category) => {
+    setModalClosing(false);
     setEditTarget(cat);
     setForm({ name: cat.name, code: cat.code, description: cat.description || "", is_active: cat.is_active });
     setErrors({});
     setModalOpen(true);
   };
-  const closeModal = () => { setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); };
+  const closeModal = () => {
+    setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); setModalClosing(false); setAllCategories([]);
+  };
+  const requestCloseModal = () => {
+    if (modalClosing) return;
+    setModalClosing(true);
+    window.setTimeout(() => closeModal(), 200);
+  };
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
+    const normalizedForm = {
+      ...form,
+      name: normalizeName(form.name),
+      code: normalizeCode(form.code),
+      description: form.description.trim(),
+    };
+
+    const nextErrors: Record<string, string> = {};
+    if (!normalizedForm.name) nextErrors.name = "Nama kategori wajib diisi.";
+    if (!normalizedForm.code) nextErrors.code = "Kode kategori wajib diisi.";
+    if (duplicateName) nextErrors.name = "Nama kategori sudah digunakan.";
+    if (duplicateCode) nextErrors.code = "Kode kategori sudah digunakan.";
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      setToast(nextErrors.name || nextErrors.code || "Form kategori belum valid.");
+      return;
+    }
+
     try {
       setErrors({});
 
       if (editTarget) {
-        const optimistic: Category = { ...editTarget, ...form };
+        const optimistic: Category = { ...editTarget, ...normalizedForm };
         setCategories((prev) =>
           prev.map((item) => (item.id === editTarget.id ? { ...item, ...optimistic } : item))
         );
         closeModal(); // tutup modal langsung
 
-        api.put(`/categories/${editTarget.id}`, form).catch((err) => {
+        api.put(`/categories/${editTarget.id}`, normalizedForm).catch((err) => {
           triggerRefresh(); // rollback dengan refetch
-          alert(err?.response?.data?.message || "Gagal menyimpan perubahan");
+          const message = err?.response?.data?.errors?.name?.[0]
+            || err?.response?.data?.errors?.code?.[0]
+            || err?.response?.data?.message
+            || "Gagal menyimpan perubahan";
+          setToast(message);
         });
 
       } else {
         closeModal(); // tutup modal langsung
 
-        api.post("/categories", form)
+        api.post("/categories", normalizedForm)
           .then(() => { setCurrentPage(1); triggerRefresh(); })
           .catch((err) => {
-            alert(err?.response?.data?.message || "Gagal menyimpan kategori");
+            const message = err?.response?.data?.errors?.name?.[0]
+              || err?.response?.data?.errors?.code?.[0]
+              || err?.response?.data?.message
+              || "Gagal menyimpan kategori";
+            setToast(message);
           });
       }
 
@@ -168,6 +276,11 @@ export default function CategoryList() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {toast && (
+        <div className="fixed right-6 top-6 z-[60] rounded-xl border border-red-100 bg-white px-4 py-3 text-sm font-medium text-red-600 shadow-lg">
+          {toast}
+        </div>
+      )}
 
       {/* SEARCH + ACTION */}
       <div className="flex justify-end items-center gap-3 mb-5">
@@ -198,38 +311,14 @@ export default function CategoryList() {
       </div>
 
       {/* ROW CONTROL */}
-      <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span>Rows per page</span>
-            <select
-              value={rowsPerPage}
-              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-          <span>Page {currentPage} of {totalPages}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-gray-400 text-sm">
-            {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
-          </span>
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-          >‹</button>
-          <button
-            disabled={currentPage === totalPages || totalData === 0}
-            onClick={() => setCurrentPage((p) => p + 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-          >›</button>
-        </div>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        rowsPerPage={rowsPerPage}
+        totalData={totalData}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        onRowsPerPageChange={setRowsPerPage}
+      />
 
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -290,37 +379,86 @@ export default function CategoryList() {
 
       {/* MODAL CREATE/EDIT */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-800">{editTarget ? "Edit Kategori" : "Tambah Kategori"}</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 transition"><X className="w-5 h-5" /></button>
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
+          style={{
+            background: "rgba(15,23,42,0.35)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) requestCloseModal();
+          }}
+        >
+          <style>{`
+            @keyframes categoryModalIn {
+              from { opacity: 0; transform: scale(0.95); }
+              to { opacity: 1; transform: scale(1); }
+            }
+            @keyframes categoryModalOut {
+              from { opacity: 1; transform: scale(1); }
+              to { opacity: 0; transform: scale(0.95); }
+            }
+          `}</style>
+          <div
+            className="bg-white w-full max-w-[620px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            style={{ animation: `${modalClosing ? "categoryModalOut" : "categoryModalIn"} 200ms ease-out forwards` }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-modal-title"
+          >
+            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Tag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 id="category-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
+                    {editTarget ? "Edit Kategori" : "Tambah Kategori"}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {editTarget ? "Perbarui nama, kode, dan status kategori" : "Tambahkan kategori aset baru"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={requestCloseModal}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                aria-label="Tutup modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-7 py-6 overflow-y-auto max-h-[calc(90vh-181px)]">
+              <div className="grid grid-cols-1 gap-5">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Nama Kategori <span className="text-red-500">*</span></label>
                 <input
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.name ? "border-red-400" : "border-gray-200"}`}
+                  ref={nameInputRef}
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${nameError ? "border-red-400" : "border-[#dbe2ea]"}`}
                   placeholder="contoh: Laptop"
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((prev) => ({ ...prev, name: "" })); }}
+                  onBlur={() => setForm((prev) => ({ ...prev, name: normalizeName(prev.name) }))}
                 />
-                {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+                {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Kode <span className="text-red-500">*</span></label>
                 <input
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.code ? "border-red-400" : "border-gray-200"}`}
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm uppercase focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${codeError ? "border-red-400" : "border-[#dbe2ea]"}`}
                   placeholder="contoh: CAT-LPT"
                   value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, code: e.target.value.toUpperCase() }); setErrors((prev) => ({ ...prev, code: "" })); }}
+                  onBlur={() => setForm((prev) => ({ ...prev, code: normalizeCode(prev.code) }))}
                 />
-                {errors.code && <p className="text-red-500 text-xs mt-1">{errors.code}</p>}
+                {codeError && <p className="text-red-500 text-xs mt-1">{codeError}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi</label>
                 <textarea
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+                  className="w-full min-h-[120px] border border-[#dbe2ea] rounded-[10px] px-3 py-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 resize-y"
                   placeholder="Deskripsi singkat kategori..."
                   rows={3}
                   value={form.description}
@@ -338,12 +476,14 @@ export default function CategoryList() {
                 </button>
                 <span className="text-xs text-gray-500">{form.is_active ? "Aktif" : "Nonaktif"}</span>
               </div>
+              </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
+            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end gap-3">
+              <button onClick={requestCloseModal} className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
+                disabled={!isFormValid}
+                className="h-11 px-5 text-sm font-medium text-white bg-[#2563eb] hover:bg-[#1d4ed8] rounded-[10px] transition flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
                 Simpan

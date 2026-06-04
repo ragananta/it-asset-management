@@ -31,7 +31,9 @@ class MaintenanceLogController extends Controller
                     'status',
                     'created_at',
                 ])
-                ->orderByDesc('date');
+                ->orderByDesc('date')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id');
 
             if ($request->filled('asset_id')) {
                 $query->where('asset_id', $request->asset_id);
@@ -124,6 +126,10 @@ class MaintenanceLogController extends Controller
 
             if (!$log) {
                 return $this->notFoundResponse('Maintenance log tidak ditemukan');
+            }
+
+            if ($log->status === 'completed') {
+                return $this->errorResponse('Maintenance yang sudah selesai tidak dapat diedit', 422);
             }
 
             $oldStatus  = $log->status;

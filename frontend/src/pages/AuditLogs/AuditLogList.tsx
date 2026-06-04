@@ -7,6 +7,8 @@ import {
   ClipboardCheck, RefreshCw, Trash2, Tag, Info,
   X, CheckCircle2,
 } from "lucide-react";
+import TablePagination from "../../components/pagination/TablePagination";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +73,38 @@ interface TimelineEvent {
   border: string;
 }
 
+interface ApiTimelineEvent {
+  id: string;
+  event_type: string;
+  category: TimelineCategory;
+  category_label: string;
+  title: string;
+  description?: string | null;
+  created_at: string;
+  details?: Record<string, string | number | null>;
+}
+
+interface TimelineMonthGroup {
+  month: string;
+  month_number: number;
+  events: ApiTimelineEvent[];
+}
+
+interface TimelineYearGroup {
+  year: number;
+  months: TimelineMonthGroup[];
+}
+
+type TimelineCategory =
+  | "all"
+  | "asset_in"
+  | "assignment"
+  | "returned"
+  | "maintenance"
+  | "data_change"
+  | "status_change"
+  | "audit";
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const auditActionLabel: Record<string, string> = {
@@ -97,6 +131,28 @@ const statusColor: Record<string, string> = {
   active: "text-teal-700 bg-teal-50",
   borrowed: "text-blue-600 bg-blue-50",
   disposed: "text-gray-500 bg-gray-100",
+};
+
+const timelineFilters: { value: TimelineCategory; label: string }[] = [
+  { value: "all", label: "Semua Aktivitas" },
+  { value: "asset_in", label: "Asset Masuk" },
+  { value: "assignment", label: "Assignment" },
+  { value: "returned", label: "Pengembalian" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "data_change", label: "Perubahan Data" },
+  { value: "status_change", label: "Status Perubahan" },
+  { value: "audit", label: "Audit Log" },
+];
+
+const timelineStyle: Record<TimelineCategory, { badge: string; dot: string; line: string; icon: React.ReactNode }> = {
+  all: { badge: "text-gray-600 bg-gray-100", dot: "bg-gray-400", line: "border-gray-200", icon: <Info className="w-4 h-4" /> },
+  asset_in: { badge: "text-cyan-700 bg-cyan-50", dot: "bg-cyan-500", line: "border-cyan-200", icon: <ShoppingCart className="w-4 h-4" /> },
+  assignment: { badge: "text-blue-700 bg-blue-50", dot: "bg-blue-500", line: "border-blue-200", icon: <UserCheck className="w-4 h-4" /> },
+  returned: { badge: "text-purple-700 bg-purple-50", dot: "bg-purple-500", line: "border-purple-200", icon: <UserX className="w-4 h-4" /> },
+  maintenance: { badge: "text-green-700 bg-green-50", dot: "bg-green-500", line: "border-green-200", icon: <Wrench className="w-4 h-4" /> },
+  data_change: { badge: "text-orange-700 bg-orange-50", dot: "bg-orange-500", line: "border-orange-200", icon: <Tag className="w-4 h-4" /> },
+  status_change: { badge: "text-orange-700 bg-orange-50", dot: "bg-orange-500", line: "border-orange-200", icon: <RefreshCw className="w-4 h-4" /> },
+  audit: { badge: "text-gray-700 bg-gray-100", dot: "bg-gray-500", line: "border-gray-200", icon: <ClipboardCheck className="w-4 h-4" /> },
 };
 
 // ─── YearGroups ───────────────────────────────────────────────────────────────
@@ -196,6 +252,129 @@ function YearGroups({
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function TimelineYearGroups({
+  groups, expandedId, setExpandedId,
+}: {
+  groups: TimelineYearGroup[];
+  expandedId: string | null;
+  setExpandedId: (id: string | null) => void;
+}) {
+  const [openYears, setOpenYears] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    setOpenYears((prev) => {
+      const next: Record<number, boolean> = {};
+      groups.forEach((group, index) => {
+        next[group.year] = prev[group.year] ?? index === 0;
+      });
+      return next;
+    });
+  }, [groups]);
+
+  const formatEventDate = (value: string) =>
+    new Date(value).toLocaleDateString("id-ID", {
+      day: "2-digit", month: "short", year: "numeric",
+    });
+
+  const formatEventTime = (value: string) =>
+    new Date(value).toLocaleTimeString("id-ID", {
+      hour: "2-digit", minute: "2-digit",
+    });
+
+  return (
+    <div className="space-y-4">
+      {groups.map((yearGroup) => {
+        const isYearOpen = openYears[yearGroup.year] ?? false;
+        const eventCount = yearGroup.months.reduce((sum, month) => sum + month.events.length, 0);
+
+        return (
+          <div key={yearGroup.year} className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
+            <button
+              onClick={() => setOpenYears((prev) => ({ ...prev, [yearGroup.year]: !isYearOpen }))}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-bold text-gray-800">{yearGroup.year}</span>
+                <span className="text-xs text-gray-400">{eventCount} event</span>
+              </div>
+              {isYearOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </button>
+
+            {isYearOpen && (
+              <div className="px-4 py-4 space-y-5">
+                {yearGroup.months.map((month) => (
+                  <div key={`${yearGroup.year}-${month.month_number}`} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{month.month}</p>
+                      <span className="h-px flex-1 bg-gray-100" />
+                    </div>
+
+                    <div className="relative pl-5 space-y-3 before:absolute before:left-[9px] before:top-2 before:bottom-2 before:w-px before:bg-gray-200">
+                      {month.events.map((event) => {
+                        const style = timelineStyle[event.category] || timelineStyle.audit;
+                        const isExpanded = expandedId === event.id;
+                        const details = Object.entries(event.details || {}).filter(([, value]) => value !== null && value !== "");
+
+                        return (
+                          <div key={event.id} className="relative">
+                            <span className={`absolute -left-[18px] top-4 w-3 h-3 rounded-full ring-4 ring-white ${style.dot}`} />
+                            <div className={`rounded-xl border bg-white transition ${isExpanded ? `${style.line} shadow-sm` : "border-gray-100 hover:border-gray-200"}`}>
+                              <button
+                                onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                                className="w-full px-4 py-3 text-left"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${style.badge}`}>
+                                    {style.icon}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-sm font-semibold text-gray-800">{event.title}</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                          {formatEventDate(event.created_at)} · {formatEventTime(event.created_at)}
+                                        </p>
+                                      </div>
+                                      <span className={`text-[11px] px-2 py-1 rounded-full font-medium whitespace-nowrap ${style.badge}`}>
+                                        {event.category_label}
+                                      </span>
+                                    </div>
+                                    {event.description && (
+                                      <p className="text-xs text-gray-500 mt-2 line-clamp-2">{event.description}</p>
+                                    )}
+                                  </div>
+                                  {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0 mt-1" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0 mt-1" />}
+                                </div>
+                              </button>
+
+                              {isExpanded && details.length > 0 && (
+                                <div className="border-t border-gray-100 px-4 pb-4 pt-3 ml-12">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {details.map(([key, value]) => (
+                                      <div key={key}>
+                                        <p className="text-[11px] uppercase tracking-wide text-gray-400">{key}</p>
+                                        <p className="text-xs font-medium text-gray-700 mt-0.5">{String(value)}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const fmtDate = (val?: string | null) => {
   if (!val) return "-";
@@ -329,17 +508,36 @@ export default function AuditLogList() {
   const [search, setSearch] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [timelineGroups, setTimelineGroups] = useState<TimelineYearGroup[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineType, setTimelineType] = useState<TimelineCategory>("all");
+  const [timelineSearchInput, setTimelineSearchInput] = useState("");
+  const [timelineSearch, setTimelineSearch] = useState("");
+  const [timelinePage, setTimelinePage] = useState(1);
+  const [timelineTotal, setTimelineTotal] = useState(0);
+  const [timelineLastPage, setTimelineLastPage] = useState(1);
+  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
+  const timelineSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchInput = (val: string) => {
     setSearchInput(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => { setSearch(val); setCurrentPage(1); }, 400);
+  };
+
+  const handleTimelineSearchInput = (val: string) => {
+    setTimelineSearchInput(val);
+    if (timelineSearchTimer.current) clearTimeout(timelineSearchTimer.current);
+    timelineSearchTimer.current = setTimeout(() => {
+      setTimelineSearch(val);
+      setTimelinePage(1);
+    }, 350);
   };
 
   useEffect(() => {
@@ -385,18 +583,26 @@ export default function AuditLogList() {
     if (selectedAsset?.id === id) {
       setSelectedAsset(null);
       setExpandedId(null);
+      setTimelineGroups([]);
+      setTimelineTotal(0);
       return;
     }
 
+    setTimelineType("all");
+    setTimelineSearchInput("");
+    setTimelineSearch("");
+    setTimelinePage(1);
+    setTimelineGroups([]);
+    setTimelineTotal(0);
+    setExpandedId(null);
+
     if (detailCache.current[id]) {
       setSelectedAsset(detailCache.current[id]);
-      setExpandedId(null);
       return;
     }
 
     try {
       setLoadingDetail(true);
-      setExpandedId(null);
       const res = await api.get(`/assets/${id}`);
       const data: Asset = res?.data?.data || res?.data || null;
       if (data) {
@@ -409,6 +615,45 @@ export default function AuditLogList() {
       setLoadingDetail(false);
     }
   }, [selectedAsset?.id]);
+
+  useEffect(() => {
+    if (!selectedAsset?.id) return;
+
+    let cancelled = false;
+    const fetchTimeline = async () => {
+      try {
+        setTimelineLoading(true);
+        const params = new URLSearchParams({
+          page: String(timelinePage),
+          per_page: "20",
+          sort: "desc",
+        });
+        if (timelineType !== "all") params.append("type", timelineType);
+        if (timelineSearch) params.append("search", timelineSearch);
+
+        const res = await api.get(`/assets/${selectedAsset.id}/timeline?${params}`);
+        if (cancelled) return;
+
+        const payload = res?.data?.data || {};
+        setTimelineGroups(payload.year_groups || []);
+        setTimelineTotal(payload.meta?.total || 0);
+        setTimelineLastPage(payload.meta?.last_page || 1);
+        setExpandedId(null);
+      } catch (err) {
+        if (!cancelled) {
+          console.error(err);
+          setTimelineGroups([]);
+          setTimelineTotal(0);
+          setTimelineLastPage(1);
+        }
+      } finally {
+        if (!cancelled) setTimelineLoading(false);
+      }
+    };
+
+    fetchTimeline();
+    return () => { cancelled = true; };
+  }, [selectedAsset?.id, timelineType, timelineSearch, timelinePage, timelineRefreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
   const timeline = selectedAsset ? buildTimeline(selectedAsset) : [];
@@ -450,34 +695,15 @@ export default function AuditLogList() {
             </div>
           </div>
 
-          <div className="flex justify-between items-center mb-3 text-sm text-gray-500">
-            <div className="flex items-center gap-2">
-              <span>Rows per page</span>
-              <select
-                value={rowsPerPage}
-                onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">
-                {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
-              </span>
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-                className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-              >‹</button>
-              <button
-                disabled={currentPage === totalPages || totalData === 0}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-              >›</button>
-            </div>
-          </div>
+          <TablePagination
+            currentPage={currentPage}
+            rowsPerPage={rowsPerPage}
+            totalData={totalData}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            onRowsPerPageChange={setRowsPerPage}
+            className="mb-3"
+          />
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             {loadingAssets ? (
@@ -539,6 +765,110 @@ export default function AuditLogList() {
           ) : selectedAsset && (
             <div className="space-y-4">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <div className="flex flex-col gap-3 mb-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-gray-700">
+                      Timeline History
+                      <span className="text-xs text-gray-400 font-normal ml-2">({timelineTotal} event)</span>
+                    </p>
+                    <button
+                      onClick={() => setTimelineRefreshKey((key) => key + 1)}
+                      className="w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-500 flex items-center justify-center transition"
+                      title="Refresh timeline"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${timelineLoading ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={timelineType}
+                      onChange={(e) => {
+                        setTimelineType(e.target.value as TimelineCategory);
+                        setTimelinePage(1);
+                      }}
+                      className="sm:w-48 border border-gray-200 rounded-full px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                      {timelineFilters.map((filter) => (
+                        <option key={filter.value} value={filter.value}>{filter.label}</option>
+                      ))}
+                    </select>
+
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        placeholder="Cari aktivitas..."
+                        className="w-full pl-9 pr-9 py-2 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        value={timelineSearchInput}
+                        onChange={(e) => handleTimelineSearchInput(e.target.value)}
+                      />
+                      {timelineSearchInput && (
+                        <button
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          onClick={() => {
+                            setTimelineSearchInput("");
+                            setTimelineSearch("");
+                            setTimelinePage(1);
+                          }}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {timelineLoading ? (
+                  <div className="py-14 text-center text-gray-400 text-sm">Memuat timeline...</div>
+                ) : timelineTotal === 0 ? (
+                  <div className="py-14 text-center">
+                    <div className="w-12 h-12 rounded-full bg-gray-100 text-gray-300 flex items-center justify-center mx-auto mb-3">
+                      <ClipboardCheck className="w-6 h-6" />
+                    </div>
+                    <p className="text-gray-400 text-sm">Belum ada aktivitas untuk aset ini.</p>
+                    <button
+                      onClick={() => {
+                        setTimelinePage(1);
+                        setTimelineRefreshKey((key) => key + 1);
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Refresh
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <TimelineYearGroups
+                      groups={timelineGroups}
+                      expandedId={expandedId}
+                      setExpandedId={setExpandedId}
+                    />
+
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
+                      <span>Page {timelinePage} of {timelineLastPage}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={timelinePage === 1}
+                          onClick={() => setTimelinePage((p) => Math.max(1, p - 1))}
+                          className="px-3 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+                        >
+                          Sebelumnya
+                        </button>
+                        <button
+                          disabled={timelinePage === timelineLastPage}
+                          onClick={() => setTimelinePage((p) => Math.min(timelineLastPage, p + 1))}
+                          className="px-3 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+                        >
+                          Berikutnya
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="font-semibold text-gray-800 text-base">{selectedAsset.asset_name}</p>
@@ -570,7 +900,7 @@ export default function AuditLogList() {
                 </button>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <div className="hidden">
                 <p className="text-sm font-semibold text-gray-700 mb-4">
                   Timeline History
                   <span className="text-xs text-gray-400 font-normal ml-2">({timeline.length} event)</span>

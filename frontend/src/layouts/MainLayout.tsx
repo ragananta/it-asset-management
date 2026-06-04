@@ -12,7 +12,7 @@ export default function MainLayout() {
       <div className="flex-1 flex flex-col">
 
         {/* HEADER */}
-        <div className="bg-white px-6 py-4 border-b flex justify-between items-center">
+        <div className="h-24 shrink-0 bg-white px-6 border-b flex justify-between items-center">
           <h1 className="font-semibold text-gray-700">IT Asset Management</h1>
 
           <div className="text-sm text-gray-500">

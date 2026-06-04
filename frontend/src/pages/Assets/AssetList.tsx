@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { Search, Filter, X, Trash2, Download } from "lucide-react";
 import AssetModal from "../../components/AssetModal";
+import TablePagination from "../../components/pagination/TablePagination";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
 interface Category { id: number; name: string; code: string; }
 interface Asset {
@@ -60,7 +62,7 @@ export default function AssetList() {
   const [filters, setFilters] = useState<Filters>({ category: "", condition: "", status: "" });
   const filterRef = useRef<HTMLDivElement>(null);
 
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -77,7 +79,7 @@ export default function AssetList() {
   useEffect(() => {
     if (categoriesFetched.current) return;
     categoriesFetched.current = true;
-    api.get("/categories?per_page=100").then((res) => {
+    api.get("/categories?mode=options&limit=100").then((res) => {
       const data = res?.data?.data?.data || res?.data?.data || res?.data || [];
       setCategories(Array.isArray(data) ? data : []);
     }).catch(() => {});
@@ -111,6 +113,7 @@ export default function AssetList() {
         const params = new URLSearchParams({
           page: String(currentPage),
           per_page: String(rowsPerPage),
+          simple: "1",
         });
         if (search) params.append("search", search);
         if (filters.category) params.append("category_id", filters.category);
@@ -123,8 +126,9 @@ export default function AssetList() {
         const payload = res?.data?.data;
         if (payload?.data) {
           setAssets(payload.data);
-          setTotalData(payload.total);
-          setTotalPages(payload.last_page);
+          const fallbackTotal = currentPage * rowsPerPage + (payload.next_page_url ? rowsPerPage : 0);
+          setTotalData(payload.total ?? fallbackTotal);
+          setTotalPages(payload.last_page ?? (payload.next_page_url ? currentPage + 1 : currentPage));
         } else {
           const data = Array.isArray(payload) ? payload : [];
           setAssets(data);
@@ -232,29 +236,26 @@ export default function AssetList() {
 
       {/* SEARCH + ACTION */}
       <div className="flex justify-end items-center gap-3 mb-5">
-        <div className="relative w-72">
+        <div className="relative w-96" ref={filterRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             placeholder="Cari asset..."
-            className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+            className="w-full pl-9 pr-20 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
             value={searchInput}
             onChange={(e) => handleSearchInput(e.target.value)}
           />
           {searchInput && (
             <button
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-        </div>
 
-        {/* Filter */}
-        <div className="relative" ref={filterRef}>
           <button
             onClick={() => setFilterOpen((v) => !v)}
-            className={`relative w-10 h-10 flex items-center justify-center rounded-full shadow transition ${
+            className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full shadow transition ${
               activeFilterCount > 0 ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-teal-500 text-white hover:bg-teal-600"
             }`}
           >
@@ -374,38 +375,14 @@ export default function AssetList() {
       )}
 
       {/* ROW CONTROL */}
-      <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span>Rows per page</span>
-            <select
-              value={rowsPerPage}
-              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-          <span>Page {currentPage} of {totalPages}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-gray-400 text-sm">
-            {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
-          </span>
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-          >‹</button>
-          <button
-            disabled={currentPage === totalPages || totalData === 0}
-            onClick={() => setCurrentPage((p) => p + 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-          >›</button>
-        </div>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        rowsPerPage={rowsPerPage}
+        totalData={totalData}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        onRowsPerPageChange={setRowsPerPage}
+      />
 
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

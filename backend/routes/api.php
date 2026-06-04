@@ -45,6 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Export Master Assets
     Route::get('/assets/export', [MasterAssetController::class, 'export']);
+    Route::get('/assets/generate-code/{categoryId}', [MasterAssetController::class, 'generateCode']);
+    Route::get('/assets/{id}/timeline', [MasterAssetController::class, 'timeline']);
 
     // Master Assets
     Route::apiResource('assets', MasterAssetController::class);

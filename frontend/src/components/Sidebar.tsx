@@ -15,8 +15,8 @@ export default function Sidebar() {
 
   const menus = [
     { name: "Dashboard",      path: "/dashboard",    icon: LayoutDashboard },
-    { name: "Assets",         path: "/assets",       icon: Package },
     { name: "Categories",     path: "/categories",   icon: Tag },
+    { name: "Assets",         path: "/assets",       icon: Package },
     { name: "Maintenance",    path: "/maintenance",  icon: Wrench },
     { name: "Assignments",    path: "/assignments",  icon: UserCheck },
     { name: "Audit Logs",     path: "/audit-logs",   icon: ClipboardList },
@@ -27,7 +27,7 @@ export default function Sidebar() {
     <div className="w-64 bg-white border-r h-full flex flex-col">
 
       {/* LOGO */}
-      <div className="px-4 py-5 flex items-center justify-center border-b border-gray-100">
+      <div className="h-24 shrink-0 px-4 flex items-center justify-center border-b border-gray-100">
         <img
           src={logo}
           alt="Saloka"

@@ -4,6 +4,8 @@ import { useAssets } from "../../context/AssetsContext";
 import { useKaryawan } from "../../context/KaryawanContext";
 import { usePolling } from "../../hooks/usePolling";
 import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download } from "lucide-react";
+import TablePagination from "../../components/pagination/TablePagination";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
 interface Assignment {
   id: number;
@@ -47,7 +49,7 @@ export default function AssignmentList() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -55,9 +57,11 @@ export default function AssignmentList() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalClosing, setModalClosing] = useState(false);
   const [editTarget, setEditTarget] = useState<Assignment | null>(null);
   const [form, setForm] = useState<AssignmentForm>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const assetSelectRef = useRef<HTMLSelectElement>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<Assignment | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -94,6 +98,25 @@ export default function AssignmentList() {
     setKaryawanDropdown(filtered);
     setShowDropdown(filtered.length > 0);
   }, [karyawanInput, karyawanList]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusTimer = window.setTimeout(() => assetSelectRef.current?.focus(), 80);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") requestCloseModal();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [modalOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,11 +176,13 @@ export default function AssignmentList() {
 
   const openCreate = () => {
     ensureAssets(); ensureKaryawan();
+    setModalClosing(false);
     setEditTarget(null); setForm(emptyForm); setKaryawanInput(""); setErrors({}); setModalOpen(true);
   };
 
   const openEdit = (item: Assignment) => {
     ensureAssets(); ensureKaryawan();
+    setModalClosing(false);
     setEditTarget(item);
     setForm({
       asset_id: String(item.asset_id), user_name: item.user_name || "",
@@ -169,7 +194,14 @@ export default function AssignmentList() {
 
   const closeModal = () => {
     setModalOpen(false); setEditTarget(null); setForm(emptyForm);
+    setModalClosing(false);
     setKaryawanInput(""); setShowDropdown(false); setErrors({});
+  };
+
+  const requestCloseModal = () => {
+    if (modalClosing) return;
+    setModalClosing(true);
+    window.setTimeout(() => closeModal(), 200);
   };
 
   const selectKaryawan = (k: typeof karyawanList[0]) => {
@@ -293,42 +325,29 @@ export default function AssignmentList() {
       </div>
 
       {/* ROW CONTROL */}
-      <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span>Rows per page</span>
-            <select value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none">
-              <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option>
-            </select>
-          </div>
-          <span>Page {currentPage} of {totalPages}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-gray-400 text-sm">
-            {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
-          </span>
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">‹</button>
-          <button disabled={currentPage === totalPages || totalData === 0} onClick={() => setCurrentPage((p) => p + 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40">›</button>
-        </div>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        rowsPerPage={rowsPerPage}
+        totalData={totalData}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        onRowsPerPageChange={setRowsPerPage}
+      />
 
         {/* TABLE */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
           <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-10">No</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[200px]">Aset</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[170px]">Dipinjam Oleh</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[130px]">No. WA</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[100px]">Tgl Pinjam</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[100px]">Tgl Kembali</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[120px]">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[140px]">Catatan</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[130px]">Aksi</th>
+                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[4%]">No</th>
+                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[18%]">Aset</th>
+                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[19%]">Dipinjam Oleh</th>
+                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[12%]">No. WA</th>
+                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[8.5%]">Tgl Pinjam</th>
+                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[8.5%]">Tgl Kembali</th>
+                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[9.5%]">Status</th>
+                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[7.5%]">Catatan</th>
+                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[13%]">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -341,44 +360,44 @@ export default function AssignmentList() {
               ) : (
                 assignments.map((item, idx) => (
                   <tr key={item.id} className={`hover:bg-blue-50/20 transition ${!isActive(item) ? "opacity-60" : ""}`}>
-                    <td className="px-4 py-3.5 text-gray-400 text-xs">{startIndex + idx + 1}</td>
-                    <td className="px-4 py-3.5 min-w-[200px]">
+                    <td className="px-3 py-4 text-gray-400 text-xs align-middle">{startIndex + idx + 1}</td>
+                    <td className="px-3 py-4 align-middle">
                       {item.asset ? (
-                        <div>
-                          <p className="font-medium text-gray-800 text-sm leading-tight">{item.asset.asset_name}</p>
-                          <p className="text-xs text-gray-400 font-mono mt-0.5">{item.asset.asset_code}</p>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-800 text-sm leading-tight truncate">{item.asset.asset_name}</p>
+                          <p className="text-xs text-gray-400 font-mono mt-0.5 truncate">{item.asset.asset_code}</p>
                         </div>
                       ) : <span className="text-gray-400 text-xs">-</span>}
                     </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
+                    <td className="px-3 py-4 align-middle">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-semibold uppercase shrink-0">
                           {(item.user_name || "?").charAt(0)}
                         </div>
-                        <span className="text-gray-700 text-sm truncate">{item.user_name || "-"}</span>
+                        <span className="text-gray-700 text-sm truncate min-w-0">{item.user_name || "-"}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-3 py-4 align-middle">
                       {item.phone ? (
                         <a
                           href={`https://wa.me/${item.phone}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-full transition font-mono"
+                          className="inline-flex max-w-full items-center gap-1.5 text-xs text-green-600 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-full transition font-mono whitespace-nowrap"
                         >
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                          <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                           </svg>
-                          {item.phone}
+                          <span className="truncate">{item.phone}</span>
                         </a>
                       ) : (
                         <span className="text-gray-700 text-sm truncate block max-w-[120px]">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-gray-600 text-xs whitespace-nowrap text-center">{formatDate(item.assign_date)}</td>
-                    <td className="px-4 py-3.5 text-gray-600 text-xs whitespace-nowrap text-center">{formatDate(item.return_date)}</td>
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.assign_date)}</td>
+                    <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.return_date)}</td>
+                    <td className="px-3 py-4 text-center align-middle">
                       <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${
                         isActive(item) ? "text-blue-700 bg-blue-50" : "text-gray-500 bg-gray-100"
                       }`}>
@@ -386,17 +405,17 @@ export default function AssignmentList() {
                         {isActive(item) ? "Dipinjam" : "Dikembalikan"}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-gray-500 text-xs">
+                    <td className="px-3 py-4 text-gray-500 text-xs align-middle">
                       <p className="line-clamp-2 leading-relaxed">{item.note || "-"}</p>
                     </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center justify-center gap-1.5">
+                    <td className="px-3 py-4 align-middle">
+                      <div className="flex items-center justify-center gap-1.5 min-w-0">
                         <button onClick={() => openEdit(item)}
-                          className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition">
+                          className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2 py-1 rounded-full flex items-center gap-1 transition whitespace-nowrap">
                           <Pencil className="w-3 h-3" /> Edit
                         </button>
                         <button onClick={() => setDeleteTarget(item)}
-                          className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition">
+                          className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2 py-1 rounded-full flex items-center gap-1 transition whitespace-nowrap">
                           <Trash2 className="w-3 h-3" /> Hapus
                         </button>
                       </div>
@@ -410,20 +429,64 @@ export default function AssignmentList() {
 
       {/* MODAL CREATE/EDIT */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-gray-500" />
-                <h2 className="font-semibold text-gray-800">{editTarget ? "Edit Peminjaman" : "Tambah Peminjaman"}</h2>
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
+          style={{
+            background: "rgba(15,23,42,0.35)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) requestCloseModal();
+          }}
+        >
+          <style>{`
+            @keyframes assignmentModalIn {
+              from { opacity: 0; transform: scale(0.95); }
+              to { opacity: 1; transform: scale(1); }
+            }
+            @keyframes assignmentModalOut {
+              from { opacity: 1; transform: scale(1); }
+              to { opacity: 0; transform: scale(0.95); }
+            }
+          `}</style>
+          <div
+            className="bg-white w-full max-w-[760px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            style={{ animation: `${modalClosing ? "assignmentModalOut" : "assignmentModalIn"} 200ms ease-out forwards` }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assignment-modal-title"
+          >
+            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 id="assignment-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
+                    {editTarget ? "Edit Peminjaman" : "Tambah Peminjaman"}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {editTarget ? "Perbarui detail peminjaman aset" : "Catat peminjaman aset baru"}
+                  </p>
+                </div>
               </div>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 transition"><X className="w-5 h-5" /></button>
+              <button
+                type="button"
+                onClick={requestCloseModal}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                aria-label="Tutup modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-7 py-6 overflow-y-auto max-h-[calc(90vh-181px)]">
+              <div className="grid grid-cols-1 gap-5">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Aset <span className="text-red-500">*</span></label>
                 <select
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.asset_id ? "border-red-400" : "border-gray-200"}`}
+                  ref={assetSelectRef}
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm bg-white focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.asset_id ? "border-red-400" : "border-[#dbe2ea]"}`}
                   value={form.asset_id}
                   onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
                 >
@@ -451,7 +514,7 @@ export default function AssignmentList() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Nama Peminjam <span className="text-red-500">*</span></label>
                 <div className="relative" ref={dropdownRef}>
                   <input type="text"
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.user_name ? "border-red-400" : "border-gray-200"}`}
+                    className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.user_name ? "border-red-400" : "border-[#dbe2ea]"}`}
                     placeholder={loadingKaryawan ? "Memuat data karyawan..." : "Ketik nama karyawan..."}
                     value={karyawanInput} disabled={loadingKaryawan}
                     onChange={(e) => { setKaryawanInput(e.target.value); setForm((f) => ({ ...f, user_name: e.target.value })); }}
@@ -475,40 +538,41 @@ export default function AssignmentList() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">No. WhatsApp <span className="text-red-500">*</span></label>
                 <input type="tel"
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.phone ? "border-red-400" : "border-gray-200"}`}
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.phone ? "border-red-400" : "border-[#dbe2ea]"}`}
                   placeholder="628123456789" value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                 {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
                 <p className="text-xs text-gray-400 mt-1">Format: 628xxx (tanpa + atau spasi)</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Tgl Pinjam <span className="text-red-500">*</span></label>
                   <input type="date"
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.assign_date ? "border-red-400" : "border-gray-200"}`}
+                    className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.assign_date ? "border-red-400" : "border-[#dbe2ea]"}`}
                     value={form.assign_date} onChange={(e) => setForm({ ...form, assign_date: e.target.value })} />
                   {errors.assign_date && <p className="text-red-500 text-xs mt-1">{errors.assign_date}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Tgl Kembali <span className="text-gray-400 font-normal">(opsional)</span></label>
                   <input type="date"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="w-full h-12 border border-[#dbe2ea] rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15"
                     value={form.return_date} onChange={(e) => setForm({ ...form, return_date: e.target.value })} />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Catatan <span className="text-gray-400 font-normal">(opsional)</span></label>
-                <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+                <textarea className="w-full min-h-[120px] border border-[#dbe2ea] rounded-[10px] px-3 py-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 resize-y"
                   placeholder="Keterangan tambahan..." rows={3} value={form.note}
                   onChange={(e) => setForm({ ...form, note: e.target.value })} />
               </div>
+              </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
+            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end gap-3">
+              <button onClick={requestCloseModal} className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
               <button onClick={handleSave}
-              className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2">
+              className="h-11 px-5 text-sm font-medium text-white bg-[#2563eb] hover:bg-[#1d4ed8] rounded-[10px] transition flex items-center gap-2 shadow-sm">
               <Check className="w-4 h-4" />
               Simpan
             </button>

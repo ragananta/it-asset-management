@@ -19,11 +19,17 @@ class FonnteService
     public function send(string $phone, string $message): void
     {
         try {
-            Http::withHeaders([
+            $response = Http::withHeaders([
                 'Authorization' => $this->token,
             ])->post('https://api.fonnte.com/send', [
                 'target'  => $phone,
                 'message' => $message,
+            ]);
+
+            Log::info('Fonnte response', [
+                'phone'  => $phone,
+                'status' => $response->status(),
+                'body'   => $response->json(),
             ]);
         } catch (\Exception $e) {
             Log::error('Fonnte error: ' . $e->getMessage());

@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
 import { Search, ActivitySquare, Monitor, Globe, X, Filter } from "lucide-react";
+import TablePagination from "../../components/pagination/TablePagination";
+import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
 interface User {
   id: number;
@@ -58,7 +60,7 @@ export default function ActivityLogList() {
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -69,6 +71,7 @@ export default function ActivityLogList() {
   const filterRef = useRef<HTMLDivElement>(null);
 
   const [detailLog, setDetailLog] = useState<ActivityLog | null>(null);
+  const [detailClosing, setDetailClosing] = useState(false);
 
   // ── expand deskripsi per row ─────────────────────────────────────────────
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -108,6 +111,39 @@ export default function ActivityLogList() {
     setCurrentPage(1);
     setFilterOpen(false);
   };
+
+  const openDetail = (log: ActivityLog) => {
+    setDetailClosing(false);
+    setDetailLog(log);
+  };
+
+  const closeDetail = () => {
+    setDetailLog(null);
+    setDetailClosing(false);
+  };
+
+  const requestCloseDetail = () => {
+    if (detailClosing) return;
+    setDetailClosing(true);
+    window.setTimeout(() => closeDetail(), 200);
+  };
+
+  useEffect(() => {
+    if (!detailLog) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") requestCloseDetail();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [detailLog, detailClosing]);
 
   // ── Fetch logs ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -187,29 +223,26 @@ export default function ActivityLogList() {
       <div className="flex justify-end items-center gap-3 mb-5">
 
         {/* Search */}
-        <div className="relative w-64">
+        <div className="relative w-96" ref={filterRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             placeholder="Cari user, IP..."
-            className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+            className="w-full pl-9 pr-20 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 shadow-sm"
             value={searchInput}
             onChange={(e) => handleSearchInput(e.target.value)}
           />
           {searchInput && (
             <button
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-        </div>
 
-        {/* Filter Button */}
-        <div className="relative" ref={filterRef}>
           <button
             onClick={() => setFilterOpen((v) => !v)}
-            className={`relative w-10 h-10 flex items-center justify-center rounded-full shadow transition ${
+            className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full shadow transition ${
               activeFilterCount > 0 ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-indigo-500 text-white hover:bg-indigo-600"
             }`}
           >
@@ -306,38 +339,14 @@ export default function ActivityLogList() {
       )}
 
       {/* ROW CONTROL */}
-      <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span>Rows per page</span>
-            <select
-              value={rowsPerPage}
-              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="border border-gray-200 rounded-md px-2 py-1 text-gray-700 text-sm focus:outline-none"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-          <span>Page {currentPage} of {totalPages}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-gray-400 text-sm">
-            {totalData === 0 ? "0" : `${startIndex + 1}–${Math.min(startIndex + rowsPerPage, totalData)} of ${totalData}`}
-          </span>
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-          >‹</button>
-          <button
-            disabled={currentPage === totalPages || totalData === 0}
-            onClick={() => setCurrentPage((p) => p + 1)}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-          >›</button>
-        </div>
-      </div>
+      <TablePagination
+        currentPage={currentPage}
+        rowsPerPage={rowsPerPage}
+        totalData={totalData}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        onRowsPerPageChange={setRowsPerPage}
+      />
 
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -417,7 +426,7 @@ export default function ActivityLogList() {
                     <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center">
                         <button
-                          onClick={() => setDetailLog(log)}
+                          onClick={() => openDetail(log)}
                           className="text-indigo-600 text-xs bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition"
                         >
                           Lihat
@@ -434,28 +443,64 @@ export default function ActivityLogList() {
 
       {/* MODAL DETAIL */}
       {detailLog && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <ActivitySquare className="w-4 h-4 text-indigo-500" />
-                <h2 className="font-semibold text-gray-800">Detail Aktivitas</h2>
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${detailClosing ? "opacity-0" : "opacity-100"}`}
+          style={{
+            background: "rgba(15,23,42,0.35)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) requestCloseDetail();
+          }}
+        >
+          <style>{`
+            @keyframes activityDetailModalIn {
+              from { opacity: 0; transform: scale(0.95); }
+              to { opacity: 1; transform: scale(1); }
+            }
+            @keyframes activityDetailModalOut {
+              from { opacity: 1; transform: scale(1); }
+              to { opacity: 0; transform: scale(0.95); }
+            }
+          `}</style>
+          <div
+            className="bg-white w-full max-w-[560px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            style={{ animation: `${detailClosing ? "activityDetailModalOut" : "activityDetailModalIn"} 200ms ease-out forwards` }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="activity-detail-title"
+          >
+            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <ActivitySquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 id="activity-detail-title" className="font-semibold text-lg text-gray-900 leading-tight">Detail Aktivitas</h2>
+                  <p className="text-sm text-gray-500 mt-1">Informasi aktivitas yang dicatat otomatis</p>
+                </div>
               </div>
-              <button onClick={() => setDetailLog(null)} className="text-gray-400 hover:text-gray-600 transition">
+              <button
+                type="button"
+                onClick={requestCloseDetail}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                aria-label="Tutup modal"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="flex items-center gap-3 bg-indigo-50 rounded-xl p-3">
-                <div className="w-10 h-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 text-sm font-bold uppercase">
+            <div className="px-7 py-6 space-y-5 overflow-y-auto max-h-[calc(90vh-191px)]">
+              <div className="flex items-center gap-4 bg-indigo-50 rounded-2xl p-4">
+                <div className="w-12 h-12 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 text-sm font-bold uppercase shrink-0">
                   {(detailLog.user?.name || "?").charAt(0)}
                 </div>
-                <div>
-                  <p className="font-medium text-gray-800">{detailLog.user?.name || "-"}</p>
-                  <p className="text-xs text-gray-500">{detailLog.user?.email || "-"}</p>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-800 truncate">{detailLog.user?.name || "-"}</p>
+                  <p className="text-sm text-gray-500 truncate">{detailLog.user?.email || "-"}</p>
                 </div>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">Aktivitas</span>
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${activityColor[detailLog.activity] || "text-gray-600 bg-gray-100"}`}>
@@ -464,7 +509,7 @@ export default function ActivityLogList() {
                 </div>
                 <div className="flex justify-between items-start text-sm gap-4">
                   <span className="text-gray-400 shrink-0">Deskripsi</span>
-                  <span className="text-gray-700 text-right text-xs">{detailLog.description || "-"}</span>
+                  <span className="text-gray-700 text-right text-sm leading-relaxed">{detailLog.description || "-"}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400">IP Address</span>
@@ -481,15 +526,15 @@ export default function ActivityLogList() {
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-1">User Agent</p>
-                <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 break-all leading-relaxed">
+                <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-4 break-all leading-relaxed">
                   {detailLog.user_agent || "-"}
                 </p>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end">
               <button
-                onClick={() => setDetailLog(null)}
-                className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                onClick={requestCloseDetail}
+                className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
               >
                 Tutup
               </button>

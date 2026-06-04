@@ -19,10 +19,31 @@ class CategoryController extends Controller
     public function index(Request $request)
     {
         try {
-            // Tampilkan data terhapus (soft deleted) kalau trashed=true
+            if ($request->get('mode') === 'options') {
+                $cacheKey = 'categories:options:' . md5($request->fullUrl());
+                $data = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($request) {
+                    $limit = min((int) $request->get('limit', 100), 500);
+
+                    return Category::query()
+                        ->select(['id', 'name', 'code'])
+                        ->where('is_active', true)
+                        ->orderBy('name')
+                        ->limit($limit)
+                        ->get();
+                });
+
+                return $this->successResponse($data, 'Opsi kategori berhasil diambil');
+            }
+
+            // Tampilkan data terhapus (soft deleted) kalau trashed=true.
+            // Hitung jumlah asset hanya saat diminta agar list kategori tetap ringan.
             $query = $request->boolean('trashed')
-                ? Category::onlyTrashed()->withCount('assets')
-                : Category::withCount('assets');
+                ? Category::onlyTrashed()
+                : Category::query();
+
+            if ($request->boolean('include_counts')) {
+                $query->withCount('assets');
+            }
 
             if ($request->filled('search')) {
                 $search = $request->search;
@@ -38,8 +59,10 @@ class CategoryController extends Controller
 
             $perPage = min((int) $request->get('per_page', 15), 100);
             $cacheKey = 'categories:index:' . md5($request->fullUrl());
-            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage) {
-                return $query->paginate($perPage);
+            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage, $request) {
+                return $request->boolean('simple')
+                    ? $query->simplePaginate($perPage)
+                    : $query->paginate($perPage);
             });
 
             return $this->successResponse($data, 'Data kategori berhasil diambil');
@@ -72,7 +95,13 @@ class CategoryController extends Controller
     public function store(CategoryRequest $request)
     {
         try {
-            $category = Category::create($request->validated());
+            $data = $request->validated();
+            if ($duplicateResponse = $this->duplicateCategoryResponse($data)) {
+                return $duplicateResponse;
+            }
+
+            $category = Category::create($data);
+            Cache::flush();
 
             $this->writeLog($request, 'create_data', "Kategori '{$category->name}' berhasil ditambahkan");
 
@@ -94,7 +123,13 @@ class CategoryController extends Controller
                 return $this->notFoundResponse('Kategori tidak ditemukan');
             }
 
-            $category->update($request->validated());
+            $data = $request->validated();
+            if ($duplicateResponse = $this->duplicateCategoryResponse($data, (int) $category->id)) {
+                return $duplicateResponse;
+            }
+
+            $category->update($data);
+            Cache::flush();
 
             $this->writeLog($request, 'update_data', "Kategori '{$category->name}' berhasil diperbarui");
 
@@ -123,6 +158,8 @@ class CategoryController extends Controller
             $name = $category->name;
             $category->delete(); // soft delete — data tidak hilang permanen
 
+            Cache::flush();
+
             $this->writeLog($request, 'delete_data', "Kategori '{$name}' berhasil dihapus");
 
             return $this->successResponse(null, 'Kategori berhasil dihapus');
@@ -144,6 +181,7 @@ class CategoryController extends Controller
             }
 
             $category->restore();
+            Cache::flush();
 
             $this->writeLog($request, 'update_data', "Kategori '{$category->name}' berhasil dipulihkan");
 
@@ -162,5 +200,38 @@ class CategoryController extends Controller
             'ip_address'  => $request->ip(),
             'user_agent'  => $request->userAgent(),
         ]);
+    }
+
+    private function duplicateCategoryResponse(array $data, ?int $ignoreId = null)
+    {
+        $nameQuery = Category::query()
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($data['name'])]);
+
+        if ($nameQuery->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kategori sudah ada',
+                'errors' => [
+                    'name' => ['Nama kategori sudah digunakan.'],
+                ],
+            ], 422);
+        }
+
+        $codeQuery = Category::query()
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->whereRaw('LOWER(code) = ?', [mb_strtolower($data['code'])]);
+
+        if ($codeQuery->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kode kategori sudah ada',
+                'errors' => [
+                    'code' => ['Kode kategori sudah digunakan.'],
+                ],
+            ], 422);
+        }
+
+        return null;
     }
 }

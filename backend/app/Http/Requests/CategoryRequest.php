@@ -15,14 +15,26 @@ class CategoryRequest extends FormRequest
 
     public function rules(): array
     {
-        $id = $this->route('category') ?? $this->route('id');
-
         return [
             'name'        => 'required|string|max:255',
-            'code'        => 'required|string|max:50|unique:categories,code,' . $id,
+            'code'        => 'required|string|max:50',
             'description' => 'nullable|string',
             'is_active'   => 'nullable|boolean',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $name = preg_replace('/\s+/', ' ', trim((string) $this->input('name', '')));
+        $code = preg_replace('/\s+/', ' ', trim((string) $this->input('code', '')));
+
+        $this->merge([
+            'name' => mb_convert_case(mb_strtolower($name), MB_CASE_TITLE, 'UTF-8'),
+            'code' => mb_strtoupper($code, 'UTF-8'),
+            'description' => $this->filled('description')
+                ? trim((string) $this->input('description'))
+                : null,
+        ]);
     }
 
     public function messages(): array
@@ -30,7 +42,6 @@ class CategoryRequest extends FormRequest
         return [
             'name.required' => 'Nama kategori wajib diisi',
             'code.required' => 'Kode kategori wajib diisi',
-            'code.unique'   => 'Kode kategori sudah digunakan',
         ];
     }
 
