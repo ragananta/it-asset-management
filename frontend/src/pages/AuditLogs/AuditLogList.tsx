@@ -139,9 +139,6 @@ const timelineFilters: { value: TimelineCategory; label: string }[] = [
   { value: "assignment", label: "Assignment" },
   { value: "returned", label: "Pengembalian" },
   { value: "maintenance", label: "Maintenance" },
-  { value: "data_change", label: "Perubahan Data" },
-  { value: "status_change", label: "Status Perubahan" },
-  { value: "audit", label: "Audit Log" },
 ];
 
 const timelineStyle: Record<TimelineCategory, { badge: string; dot: string; line: string; icon: React.ReactNode }> = {
@@ -149,10 +146,25 @@ const timelineStyle: Record<TimelineCategory, { badge: string; dot: string; line
   asset_in: { badge: "text-cyan-700 bg-cyan-50", dot: "bg-cyan-500", line: "border-cyan-200", icon: <ShoppingCart className="w-4 h-4" /> },
   assignment: { badge: "text-blue-700 bg-blue-50", dot: "bg-blue-500", line: "border-blue-200", icon: <UserCheck className="w-4 h-4" /> },
   returned: { badge: "text-purple-700 bg-purple-50", dot: "bg-purple-500", line: "border-purple-200", icon: <UserX className="w-4 h-4" /> },
-  maintenance: { badge: "text-green-700 bg-green-50", dot: "bg-green-500", line: "border-green-200", icon: <Wrench className="w-4 h-4" /> },
+  maintenance: { badge: "text-orange-700 bg-orange-50", dot: "bg-orange-500", line: "border-orange-200", icon: <Wrench className="w-4 h-4" /> },
   data_change: { badge: "text-orange-700 bg-orange-50", dot: "bg-orange-500", line: "border-orange-200", icon: <Tag className="w-4 h-4" /> },
   status_change: { badge: "text-orange-700 bg-orange-50", dot: "bg-orange-500", line: "border-orange-200", icon: <RefreshCw className="w-4 h-4" /> },
   audit: { badge: "text-gray-700 bg-gray-100", dot: "bg-gray-500", line: "border-gray-200", icon: <ClipboardCheck className="w-4 h-4" /> },
+};
+
+const maintenanceCompletedStyle = {
+  badge: "text-green-700 bg-green-50",
+  dot: "bg-green-500",
+  line: "border-green-200",
+  icon: <Wrench className="w-4 h-4" />,
+};
+
+const getTimelineEventStyle = (event: ApiTimelineEvent) => {
+  if (event.category === "maintenance" && /selesai|completed/i.test(event.title || event.event_type || "")) {
+    return maintenanceCompletedStyle;
+  }
+
+  return timelineStyle[event.category] || timelineStyle.audit;
 };
 
 // ─── YearGroups ───────────────────────────────────────────────────────────────
@@ -312,7 +324,7 @@ function TimelineYearGroups({
 
                     <div className="relative pl-5 space-y-3 before:absolute before:left-[9px] before:top-2 before:bottom-2 before:w-px before:bg-gray-200">
                       {month.events.map((event) => {
-                        const style = timelineStyle[event.category] || timelineStyle.audit;
+                        const style = getTimelineEventStyle(event);
                         const isExpanded = expandedId === event.id;
                         const details = Object.entries(event.details || {}).filter(([, value]) => value !== null && value !== "");
 

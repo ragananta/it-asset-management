@@ -36,54 +36,60 @@ class MasterAssetController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = MasterAsset::with([
-                'category:id,name',
-                'assignedUser:id,name',
-            ])->select([
-                'id',
-                'asset_code',
-                'asset_name',
-                'category_id',
-                'location_id',
-                'assigned_user_id',
-                'brand',
-                'model',
-                'serial_number',
-                'condition_status',
-                'status',
-                'created_at',
-            ]);
-
-            if ($request->has('search')) {
-                $search = $request->search;
-                $query->where(function ($q) use ($search) {
-                    $q->where('asset_code', 'like', "%{$search}%")
-                      ->orWhere('asset_name', 'like', "%{$search}%")
-                      ->orWhere('brand', 'like', "%{$search}%")
-                      ->orWhere('serial_number', 'like', "%{$search}%");
-                });
-            }
-
-            if ($request->filled('category_id')) {
-                $query->where('category_id', $request->category_id);
-            }
-
-            if ($request->filled('condition_status')) {
-                $query->where('condition_status', $request->condition_status);
-            }
-
-            if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            }
-
-            if ($request->filled('location_id')) {
-                $query->where('location_id', $request->location_id);
-            }
-
-            $perPage = min((int) $request->get('per_page', 10), 100);
             $cacheKey = 'assets:index:' . md5($request->fullUrl());
-            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage, $request) {
+
+            $data = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($cacheKey, $request) {
+                // Track cache key untuk keperluan clear spesifik
+                $keys = Cache::get('assets:cache_keys', []);
+                if (!in_array($cacheKey, $keys)) {
+                    $keys[] = $cacheKey;
+                    Cache::put('assets:cache_keys', $keys, now()->addHours(1));
+                }
+
+                $query = MasterAsset::with([
+                    'category:id,name',
+                ])->select([
+                    'id',
+                    'asset_code',
+                    'asset_name',
+                    'category_id',
+                    'brand',
+                    'model',
+                    'serial_number',
+                    'condition_status',
+                    'status',
+                    'created_at',
+                ]);
+
+                if ($request->filled('search')) {
+                    $search = $request->search;
+                    $query->where(function ($q) use ($search) {
+                        $q->where('asset_code', 'like', "%{$search}%")
+                          ->orWhere('asset_name', 'like', "%{$search}%")
+                          ->orWhere('brand', 'like', "%{$search}%")
+                          ->orWhere('serial_number', 'like', "%{$search}%");
+                    });
+                }
+
+                if ($request->filled('category_id')) {
+                    $query->where('category_id', $request->integer('category_id'));
+                }
+
+                if ($request->filled('condition_status')) {
+                    $query->where('condition_status', $request->condition_status);
+                }
+
+                if ($request->filled('status')) {
+                    $query->where('status', $request->status);
+                }
+
+                if ($request->filled('location_id')) {
+                    $query->where('location_id', $request->integer('location_id'));
+                }
+
                 $query->orderBy('created_at', 'desc');
+
+                $perPage = min($request->integer('per_page', 10), 100);
 
                 return $request->boolean('simple')
                     ? $query->simplePaginate($perPage)
@@ -124,195 +130,207 @@ class MasterAssetController extends Controller
     public function timeline(Request $request, $id)
     {
         try {
-            $asset = MasterAsset::with(['category', 'assignedUser'])->find($id);
+            $asset = MasterAsset::with(['category:id,name'])->find($id);
 
             if (!$asset) {
                 return $this->notFoundResponse('Aset tidak ditemukan');
             }
 
-            $type = $request->get('type', 'all');
-            $search = Str::lower((string) $request->get('search', ''));
-            $sort = strtolower($request->get('sort', 'desc')) === 'asc' ? 'asc' : 'desc';
-            $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
-            $page = max((int) $request->get('page', 1), 1);
+            $type    = $request->get('type', 'all');
+            $search  = Str::lower((string) $request->get('search', ''));
+            $sort    = strtolower($request->get('sort', 'desc')) === 'asc' ? 'asc' : 'desc';
+            $perPage = min(max($request->integer('per_page', 20), 1), 100);
+            $page    = max($request->integer('page', 1), 1);
 
             $events = collect();
 
+            // ── Asset Created ──────────────────────────────────────
             $events->push([
-                'id' => "asset-created-{$asset->id}",
-                'event_type' => 'asset_created',
-                'category' => 'asset_in',
+                'id'             => "asset-created-{$asset->id}",
+                'event_type'     => 'asset_created',
+                'category'       => 'asset_in',
                 'category_label' => 'Asset Masuk',
-                'title' => 'Asset Masuk ke IT',
-                'description' => "{$asset->asset_name} ({$asset->asset_code}) terdaftar di sistem",
-                'created_at' => optional($asset->created_at)->toISOString(),
-                'details' => [
-                    'Kode Aset' => $asset->asset_code,
-                    'Nama Aset' => $asset->asset_name,
-                    'Kategori' => $asset->category?->name,
+                'title'          => 'Asset Masuk ke IT',
+                'description'    => "{$asset->asset_name} ({$asset->asset_code}) terdaftar di sistem",
+                'created_at'     => optional($asset->created_at)->toISOString(),
+                'details'        => [
+                    'Kode Aset'    => $asset->asset_code,
+                    'Nama Aset'    => $asset->asset_name,
+                    'Kategori'     => $asset->category?->name,
                     'Tanggal Beli' => optional($asset->purchase_date)->format('d M Y'),
-                    'Harga' => $asset->purchase_price !== null ? 'Rp' . number_format((float) $asset->purchase_price, 0, ',', '.') : null,
+                    'Harga'        => $asset->purchase_price !== null
+                        ? 'Rp' . number_format((float) $asset->purchase_price, 0, ',', '.')
+                        : null,
                 ],
             ]);
 
-            AssetAssignment::where('asset_id', $asset->id)->get()->each(function ($assignment) use ($events) {
-                $events->push([
-                    'id' => "asset-assigned-{$assignment->id}",
-                    'event_type' => 'asset_assigned',
-                    'category' => 'assignment',
-                    'category_label' => 'Assignment',
-                    'title' => "Dipinjam oleh {$assignment->user_name}",
-                    'description' => $assignment->note,
-                    'created_at' => optional($assignment->created_at)->toISOString(),
-                    'details' => [
-                        'User' => $assignment->user_name,
-                        'Telepon' => $assignment->phone,
-                        'Tanggal Pinjam' => optional($assignment->assign_date)->format('d M Y'),
-                        'Catatan' => $assignment->note,
-                    ],
-                ]);
-
-                if ($assignment->return_date) {
+            // ── Assignments ────────────────────────────────────────
+            AssetAssignment::where('asset_id', $asset->id)
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->each(function ($assignment) use ($events) {
                     $events->push([
-                        'id' => "asset-returned-{$assignment->id}",
-                        'event_type' => 'asset_returned',
-                        'category' => 'returned',
-                        'category_label' => 'Pengembalian',
-                        'title' => "Dikembalikan oleh {$assignment->user_name}",
-                        'description' => $assignment->note,
-                        'created_at' => optional($assignment->updated_at ?? $assignment->created_at)->toISOString(),
-                        'details' => [
-                            'User' => $assignment->user_name,
+                        'id'             => "asset-assigned-{$assignment->id}",
+                        'event_type'     => 'asset_assigned',
+                        'category'       => 'assignment',
+                        'category_label' => 'Assignment',
+                        'title'          => "Dipinjam oleh {$assignment->user_name}",
+                        'description'    => $assignment->note,
+                        'created_at'     => optional($assignment->created_at)->toISOString(),
+                        'details'        => [
+                            'User'           => $assignment->user_name,
+                            'Telepon'        => $assignment->phone,
                             'Tanggal Pinjam' => optional($assignment->assign_date)->format('d M Y'),
-                            'Tanggal Kembali' => optional($assignment->return_date)->format('d M Y'),
-                            'Catatan' => $assignment->note,
+                            'Catatan'        => $assignment->note,
                         ],
                     ]);
-                }
-            });
 
-            MaintenanceLog::where('asset_id', $asset->id)->get()->each(function ($maintenance) use ($events) {
-                $isCompleted = $maintenance->status === 'completed';
-                $events->push([
-                    'id' => "maintenance-{$maintenance->id}",
-                    'event_type' => $isCompleted ? 'maintenance_completed' : 'maintenance_started',
-                    'category' => 'maintenance',
-                    'category_label' => 'Maintenance',
-                    'title' => $isCompleted ? 'Maintenance Selesai' : 'Maintenance Dimulai',
-                    'description' => $maintenance->description,
-                    'created_at' => optional($maintenance->created_at)->toISOString(),
-                    'details' => [
-                        'Teknisi' => $maintenance->pic,
-                        'Catatan' => $maintenance->description,
-                        'Biaya' => $maintenance->cost !== null ? 'Rp' . number_format((float) $maintenance->cost, 0, ',', '.') : null,
-                        'Tanggal Maintenance' => optional($maintenance->date)->format('d M Y'),
-                        'Status' => $isCompleted ? 'Selesai' : 'Berlangsung',
-                    ],
-                ]);
-            });
+                    if ($assignment->return_date) {
+                        $events->push([
+                            'id'             => "asset-returned-{$assignment->id}",
+                            'event_type'     => 'asset_returned',
+                            'category'       => 'returned',
+                            'category_label' => 'Pengembalian',
+                            'title'          => "Dikembalikan oleh {$assignment->user_name}",
+                            'description'    => $assignment->note,
+                            'created_at'     => optional($assignment->updated_at ?? $assignment->created_at)->toISOString(),
+                            'details'        => [
+                                'User'           => $assignment->user_name,
+                                'Tanggal Pinjam' => optional($assignment->assign_date)->format('d M Y'),
+                                'Tanggal Kembali'=> optional($assignment->return_date)->format('d M Y'),
+                                'Catatan'        => $assignment->note,
+                            ],
+                        ]);
+                    }
+                });
 
-            AuditLog::where('asset_id', $asset->id)->get()->each(function ($audit) use ($events) {
-                $events->push([
-                    'id' => "audit-{$audit->id}",
-                    'event_type' => 'audit_log',
-                    'category' => 'audit',
-                    'category_label' => 'Audit Log',
-                    'title' => 'Audit Log',
-                    'description' => $audit->description,
-                    'created_at' => optional($audit->created_at)->toISOString(),
-                    'details' => [
-                        'Aksi' => $audit->action,
-                        'PIC' => $audit->pic,
-                        'Catatan' => $audit->description,
-                    ],
-                ]);
-            });
+            // ── Maintenance Logs ───────────────────────────────────
+            MaintenanceLog::where('asset_id', $asset->id)
+                ->latest()
+                ->limit(50)
+                ->get()
+                ->each(function ($maintenance) use ($events) {
+                    $isCompleted = $maintenance->status === 'completed';
+                    $events->push([
+                        'id'             => "maintenance-{$maintenance->id}",
+                        'event_type'     => $isCompleted ? 'maintenance_completed' : 'maintenance_started',
+                        'category'       => 'maintenance',
+                        'category_label' => 'Maintenance',
+                        'title'          => $isCompleted ? 'Maintenance Selesai' : 'Maintenance Dimulai',
+                        'description'    => $maintenance->description,
+                        'created_at'     => optional($maintenance->created_at)->toISOString(),
+                        'details'        => [
+                            'Teknisi'             => $maintenance->pic,
+                            'Catatan'             => $maintenance->description,
+                            'Biaya'               => $maintenance->cost !== null
+                                ? 'Rp' . number_format((float) $maintenance->cost, 0, ',', '.')
+                                : null,
+                            'Tanggal Maintenance' => optional($maintenance->date)->format('d M Y'),
+                            'Status'              => $isCompleted ? 'Selesai' : 'Berlangsung',
+                        ],
+                    ]);
+                });
 
-            Log::where(function ($query) use ($asset) {
-                $query->where('description', 'like', "%{$asset->asset_name}%")
-                    ->orWhere('description', 'like', "%{$asset->asset_code}%");
-            })->get()->each(function ($log) use ($events) {
-                $isDataChange = Str::contains($log->activity, 'update');
-                $isStatusChange = Str::contains(Str::lower($log->description), ['status', 'kondisi', 'condition']);
+            // ── Audit Logs ─────────────────────────────────────────
+            AuditLog::where('asset_id', $asset->id)
+                ->latest()
+                ->limit(50)
+                ->get()
+                ->each(function ($audit) use ($events) {
+                    $events->push([
+                        'id'             => "audit-{$audit->id}",
+                        'event_type'     => 'audit_log',
+                        'category'       => 'audit',
+                        'category_label' => 'Audit Log',
+                        'title'          => 'Audit Log',
+                        'description'    => $audit->description,
+                        'created_at'     => optional($audit->created_at)->toISOString(),
+                        'details'        => [
+                            'Aksi'    => $audit->action,
+                            'PIC'     => $audit->pic,
+                            'Catatan' => $audit->description,
+                        ],
+                    ]);
+                });
 
-                if (!$isDataChange && !$isStatusChange) {
-                    return;
-                }
-
-                $events->push([
-                    'id' => "log-{$log->id}",
-                    'event_type' => $isDataChange ? 'asset_updated' : 'status_changed',
-                    'category' => $isDataChange ? 'data_change' : 'status_change',
-                    'category_label' => $isDataChange ? 'Perubahan Data' : 'Status Perubahan',
-                    'title' => $isDataChange ? 'Perubahan Data' : 'Status Perubahan',
-                    'description' => $log->description,
-                    'created_at' => optional($log->created_at)->toISOString(),
-                    'details' => [
-                        'Aktivitas' => $log->activity,
-                        'Deskripsi' => $log->description,
-                        'IP Address' => $log->ip_address,
-                    ],
-                ]);
-            });
-
-            $filtered = $events
-                ->filter(fn($event) => $type === 'all' || $event['category'] === $type)
-                ->filter(function ($event) use ($search) {
-                    if ($search === '') return true;
-                    return Str::contains(Str::lower(json_encode($event)), $search);
+            // ── Activity Logs ──────────────────────────────────────
+            Log::where(function ($q) use ($asset) {
+                    $q->where('description', 'like', "%{$asset->asset_name}%")
+                      ->orWhere('description', 'like', "%{$asset->asset_code}%");
                 })
+                ->whereIn('activity', ['update_data', 'create_data'])
+                ->latest()
+                ->limit(50)
+                ->get()
+                ->each(function ($log) use ($events) {
+                    $isDataChange   = Str::contains($log->activity, 'update');
+                    $isStatusChange = Str::contains(Str::lower($log->description), ['status', 'kondisi', 'condition']);
+
+                    if (!$isDataChange && !$isStatusChange) return;
+
+                    $events->push([
+                        'id'             => "log-{$log->id}",
+                        'event_type'     => $isDataChange ? 'asset_updated' : 'status_changed',
+                        'category'       => $isDataChange ? 'data_change' : 'status_change',
+                        'category_label' => $isDataChange ? 'Perubahan Data' : 'Status Perubahan',
+                        'title'          => $isDataChange ? 'Perubahan Data' : 'Status Perubahan',
+                        'description'    => $log->description,
+                        'created_at'     => optional($log->created_at)->toISOString(),
+                        'details'        => [
+                            'Aktivitas'  => $log->activity,
+                            'Deskripsi'  => $log->description,
+                            'IP Address' => $log->ip_address,
+                        ],
+                    ]);
+                });
+
+            // ── Filter, Sort & Paginate ────────────────────────────
+            $filtered = $events
+                ->when($type !== 'all', fn($c) => $c->filter(fn($e) => $e['category'] === $type))
+                ->when($search !== '', fn($c) => $c->filter(
+                    fn($e) => Str::contains(Str::lower(json_encode($e)), $search)
+                ))
                 ->sortBy('created_at', SORT_REGULAR, $sort === 'desc')
                 ->values();
 
             $total = $filtered->count();
             $paged = $filtered->forPage($page, $perPage)->values();
 
-            $yearGroups = $paged
-                ->groupBy(fn($event) => (int) date('Y', strtotime($event['created_at'])))
-                ->map(function ($yearEvents, $year) {
-                    return [
-                        'year' => (int) $year,
-                        'months' => $yearEvents
-                            ->groupBy(fn($event) => date('n', strtotime($event['created_at'])))
-                            ->map(function ($monthEvents, $monthNumber) {
-                                $monthNames = [
-                                    1 => 'Januari',
-                                    2 => 'Februari',
-                                    3 => 'Maret',
-                                    4 => 'April',
-                                    5 => 'Mei',
-                                    6 => 'Juni',
-                                    7 => 'Juli',
-                                    8 => 'Agustus',
-                                    9 => 'September',
-                                    10 => 'Oktober',
-                                    11 => 'November',
-                                    12 => 'Desember',
-                                ];
+            $monthNames = [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret',
+                4 => 'April',   5 => 'Mei',       6 => 'Juni',
+                7 => 'Juli',    8 => 'Agustus',   9 => 'September',
+                10 => 'Oktober',11 => 'November', 12 => 'Desember',
+            ];
 
-                                return [
-                                    'month' => $monthNames[(int) $monthNumber] ?? '-',
-                                    'month_number' => (int) $monthNumber,
-                                    'events' => $monthEvents->values(),
-                                ];
-                            })
-                            ->sortByDesc('month_number')
-                            ->values(),
-                    ];
-                })
+            $yearGroups = $paged
+                ->groupBy(fn($e) => (int) date('Y', strtotime($e['created_at'])))
+                ->map(fn($yearEvents, $year) => [
+                    'year'   => (int) $year,
+                    'months' => $yearEvents
+                        ->groupBy(fn($e) => (int) date('n', strtotime($e['created_at'])))
+                        ->map(fn($monthEvents, $monthNumber) => [
+                            'month'        => $monthNames[$monthNumber] ?? '-',
+                            'month_number' => $monthNumber,
+                            'events'       => $monthEvents->values(),
+                        ])
+                        ->sortByDesc('month_number')
+                        ->values(),
+                ])
                 ->sortByDesc('year')
                 ->values();
 
             return $this->successResponse([
                 'year_groups' => $yearGroups,
-                'meta' => [
-                    'page' => $page,
-                    'per_page' => $perPage,
-                    'total' => $total,
+                'meta'        => [
+                    'page'      => $page,
+                    'per_page'  => $perPage,
+                    'total'     => $total,
                     'last_page' => (int) ceil($total / $perPage),
-                    'sort' => $sort,
-                    'type' => $type,
-                    'search' => $search,
+                    'sort'      => $sort,
+                    'type'      => $type,
+                    'search'    => $search,
                 ],
             ], 'Timeline aset berhasil diambil');
 
@@ -346,7 +364,7 @@ class MasterAssetController extends Controller
             unset($data['category_name'], $data['user_name']);
 
             $asset = MasterAsset::create($data);
-            Cache::flush();
+            $this->clearAssetCache();
 
             $this->writeLog(
                 $request, 'create_data',
@@ -394,7 +412,7 @@ class MasterAssetController extends Controller
             }
 
             $asset->update($data);
-            Cache::flush();
+            $this->clearAssetCache();
 
             $this->writeLog(
                 $request, 'update_data',
@@ -422,7 +440,7 @@ class MasterAssetController extends Controller
 
             $info = "{$asset->asset_name} ({$asset->asset_code})";
             $asset->delete();
-            Cache::flush();
+            $this->clearAssetCache();
 
             $this->writeLog(
                 $request, 'delete_data',
@@ -439,7 +457,16 @@ class MasterAssetController extends Controller
     public function export(Request $request)
     {
         $filename = 'data-aset-' . now()->format('Ymd-His') . '.xlsx';
-    return Excel::download(new AssetsExport($request), $filename);
+        return Excel::download(new AssetsExport($request), $filename);
+    }
+
+    private function clearAssetCache(): void
+    {
+        $keys = Cache::get('assets:cache_keys', []);
+        foreach ($keys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('assets:cache_keys');
     }
 
     private function writeLog(Request $request, string $activity, string $description): void

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface TablePaginationProps {
   currentPage: number;
@@ -14,6 +14,7 @@ interface TablePaginationProps {
 const DEFAULT_ROWS_PER_PAGE = 10;
 const MIN_ROWS_PER_PAGE = 1;
 const MAX_ROWS_PER_PAGE = 500;
+const ROWS_PER_PAGE_OPTIONS = [5, 10, 15, 20, 25, 50, 100, 200];
 
 const normalizeRowsPerPage = (value: string | number) => {
   if (value === "") return DEFAULT_ROWS_PER_PAGE;
@@ -36,6 +37,7 @@ export default function TablePagination({
   className = "mb-4",
 }: TablePaginationProps) {
   const [inputValue, setInputValue] = useState(String(rowsPerPage));
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const startIndex = (currentPage - 1) * rowsPerPage;
 
   useEffect(() => {
@@ -45,12 +47,9 @@ export default function TablePagination({
   const commitRowsPerPage = (value: string | number) => {
     const nextRowsPerPage = normalizeRowsPerPage(value);
     setInputValue(String(nextRowsPerPage));
+    setOptionsOpen(false);
     onRowsPerPageChange(nextRowsPerPage);
     onPageChange(1);
-  };
-
-  const changeRowsPerPageBy = (amount: number) => {
-    commitRowsPerPage(rowsPerPage + amount);
   };
 
   return (
@@ -58,16 +57,7 @@ export default function TablePagination({
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex items-center gap-2">
           <span className="whitespace-nowrap">Rows per page</span>
-          <div className="flex h-9 items-center overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            <button
-              type="button"
-              onClick={() => changeRowsPerPageBy(-1)}
-              className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-              disabled={rowsPerPage <= MIN_ROWS_PER_PAGE}
-              aria-label="Kurangi rows per page"
-            >
-              <Minus className="w-3.5 h-3.5" />
-            </button>
+          <div className="relative">
             <input
               type="number"
               min={MIN_ROWS_PER_PAGE}
@@ -80,17 +70,34 @@ export default function TablePagination({
                   e.currentTarget.blur();
                 }
               }}
-              className="h-9 w-14 border-x border-gray-200 text-center text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="h-8 w-16 rounded-md border border-gray-200 bg-white pl-3 pr-7 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             <button
               type="button"
-              onClick={() => changeRowsPerPageBy(1)}
-              className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition disabled:opacity-40"
-              disabled={rowsPerPage >= MAX_ROWS_PER_PAGE}
-              aria-label="Tambah rows per page"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setOptionsOpen((open) => !open)}
+              className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 transition"
+              aria-label="Pilih rows per page"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <ChevronDown className={`w-4 h-4 transition-transform ${optionsOpen ? "rotate-180" : ""}`} />
             </button>
+            {optionsOpen && (
+              <div className="absolute left-0 top-10 z-40 w-20 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-xl">
+                {ROWS_PER_PAGE_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => commitRowsPerPage(option)}
+                    className={`w-full px-3 py-2 text-left text-sm transition ${
+                      option === rowsPerPage ? "bg-blue-50 font-semibold text-blue-600" : "text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <span className="whitespace-nowrap">Page {currentPage} of {totalPages}</span>
