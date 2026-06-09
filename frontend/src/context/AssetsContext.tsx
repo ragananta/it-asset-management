@@ -33,7 +33,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
     try {
       fetchingRef.current = true;
       setLoadingAssets(true);
-      const res = await api.get("/assets?per_page=100");
+      const res = await api.get("/assets?per_page=500&simple=1");
       const data = res?.data?.data?.data || res?.data?.data || res?.data || [];
       setAssets(Array.isArray(data) ? data : []);
       fetched.current = true;

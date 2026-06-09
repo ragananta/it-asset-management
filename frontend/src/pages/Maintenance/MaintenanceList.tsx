@@ -80,6 +80,7 @@ export default function MaintenanceList() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalClosing, setModalClosing] = useState(false);
   const [editTarget, setEditTarget] = useState<MaintenanceLog | null>(null);
   const [form, setForm] = useState<MaintenanceForm>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -203,12 +204,14 @@ export default function MaintenanceList() {
 
   const openCreate = () => {
     ensureAssets();
+    setModalClosing(false);
     setEditTarget(null); setForm(emptyForm); setErrors({}); setModalOpen(true);
   };
 
   const openEdit = (log: MaintenanceLog) => {
     if (log.status === "completed") return;
     ensureAssets();
+    setModalClosing(false);
     setEditTarget(log);
     setForm({
       asset_id: String(log.asset_id), date: log.date?.slice(0, 10) || "",
@@ -218,7 +221,13 @@ export default function MaintenanceList() {
     setErrors({}); setModalOpen(true);
   };
 
-  const closeModal = () => { setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); };
+  const closeModal = () => { setModalOpen(false); setModalClosing(false); setEditTarget(null); setForm(emptyForm); setErrors({}); };
+
+  const requestCloseModal = () => {
+    if (modalClosing) return;
+    setModalClosing(true);
+    window.setTimeout(() => closeModal(), 200);
+  };
 
   const handleSave = async () => {
     if (editTarget?.status === "completed") {
@@ -232,7 +241,7 @@ export default function MaintenanceList() {
       setErrors({});
       const payload = { ...form, asset_id: Number(form.asset_id), cost: Number(form.cost) };
 
-      closeModal(); // ← tutup modal langsung
+      requestCloseModal(); // ← tutup modal langsung
 
       if (target) {
         const res = await api.put(`/maintenance-logs/${target.id}`, payload);
@@ -243,7 +252,7 @@ export default function MaintenanceList() {
         setCurrentPage(1); triggerRefresh();
       }
     } catch (err: any) {
-      setModalOpen(true); // buka modal lagi kalau error
+      setModalOpen(true); setModalClosing(false); // buka modal lagi kalau error
       setEditTarget(target);
       if (err?.response?.data?.errors) {
         const apiErrors: Record<string, string> = {};
@@ -406,17 +415,17 @@ export default function MaintenanceList() {
 
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm table-fixed">
+        <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[4%]">No</th>
-              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[16%]">Aset</th>
-              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[9%]">Tanggal</th>
-              <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[23%]">Deskripsi</th>
-              <th className="px-3 py-4 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[12%]">Biaya</th>
-              <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[8%]">PIC</th>
-              <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[11%]">Status</th>
-              <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[17%]">Aksi</th>
+              <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-12">No</th>
+              <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap min-w-[160px]">Aset</th>
+              <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-28">Tanggal</th>
+              <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase w-[30%]">Deskripsi</th>
+              <th className="px-4 py-4 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-36">Biaya</th>
+              <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-32">PIC</th>
+              <th className="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-28">Status</th>
+              <th className="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-36">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -429,8 +438,8 @@ export default function MaintenanceList() {
             ) : (
               logs.map((log, idx) => (
                 <tr key={log.id} className={`transition ${log.status === "completed" ? "bg-gray-50/60 hover:bg-gray-50" : "hover:bg-blue-50/20"}`}>
-                  <td className="px-3 py-4 text-gray-400 text-xs align-middle">{startIndex + idx + 1}</td>
-                  <td className="px-3 py-4 align-middle">
+                  <td className="px-4 py-4 text-gray-400 text-xs align-middle">{startIndex + idx + 1}</td>
+                  <td className="px-4 py-4 align-middle">
                     {log.asset ? (
                       <div className="min-w-0">
                         <p className="font-medium text-gray-800 text-sm leading-tight truncate">{log.asset.asset_name}</p>
@@ -438,44 +447,45 @@ export default function MaintenanceList() {
                       </div>
                     ) : <span className="text-gray-400 text-xs">-</span>}
                   </td>
-                  <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap align-middle">{formatDate(log.date)}</td>
-                  <td className="px-3 py-4 text-gray-600 text-xs align-middle">
+                  <td className="px-4 py-4 text-gray-600 text-xs whitespace-nowrap align-middle">{formatDate(log.date)}</td>
+                  <td className="px-4 py-4 text-gray-600 text-xs align-middle">
                     <p className="line-clamp-2 leading-relaxed">{log.description || "-"}</p>
                   </td>
-                  <td className="px-3 py-4 text-gray-700 text-xs font-medium whitespace-nowrap text-right align-middle">
-                    {log.cost ? formatCurrency(log.cost) : <span className="text-gray-300">-</span>}
+                  <td className="px-4 py-4 text-gray-700 text-sm font-medium whitespace-nowrap text-right align-middle">
+                    {log.cost ? formatCurrency(log.cost) : <span className="text-gray-300 text-xs">-</span>}
                   </td>
-                  <td className="px-3 py-4 text-center align-middle">
-                    <span className="inline-flex max-w-full items-center justify-center text-xs text-purple-700 bg-purple-50 px-2 py-1 rounded-full truncate">
-                      {log.pic || "-"}
+                  <td className="px-4 py-4 align-middle">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-purple-700">
+                      <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+                      <span className="truncate max-w-[100px]">{log.pic || "-"}</span>
                     </span>
                   </td>
-                  <td className="px-3 py-4 text-center align-middle">
+                  <td className="px-4 py-4 text-center align-middle">
                     <span className={`inline-flex items-center justify-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${
                       log.status === "completed" ? "text-teal-700 bg-teal-50" : "text-amber-700 bg-amber-50"
                     }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${log.status === "completed" ? "bg-teal-500" : "bg-amber-500"}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full ${log.status === "completed" ? "bg-teal-500" : "bg-amber-400"}`} />
                       {log.status === "completed" ? "Selesai" : "Berlangsung"}
                     </span>
                   </td>
-                  <td className="px-3 py-4 align-middle">
-                    <div className="grid grid-cols-[74px_66px] items-center justify-center gap-2">
+                  <td className="px-4 py-4 align-middle">
+                    <div className="flex items-center justify-center gap-1.5">
                       {log.status === "completed" ? (
                         <button
                           disabled
                           title="Maintenance yang sudah selesai tidak dapat diedit"
-                          className="w-full text-gray-400 text-xs bg-gray-100 px-2 py-1 rounded-full flex items-center justify-center gap-1 cursor-not-allowed whitespace-nowrap"
+                          className="text-gray-400 text-xs bg-gray-100 px-2.5 py-1 rounded-full flex items-center gap-1 cursor-not-allowed whitespace-nowrap"
                         >
                           <LockKeyhole className="w-3 h-3" /> Terkunci
                         </button>
                       ) : (
                         <button onClick={() => openEdit(log)}
-                          className="w-full text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2 py-1 rounded-full flex items-center justify-center gap-1 transition whitespace-nowrap">
+                          className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition whitespace-nowrap">
                           <Pencil className="w-3 h-3" /> Edit
                         </button>
                       )}
                       <button onClick={() => setDeleteTarget(log)}
-                        className="w-full text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2 py-1 rounded-full flex items-center justify-center gap-1 transition whitespace-nowrap">
+                        className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition whitespace-nowrap">
                         <Trash2 className="w-3 h-3" /> Hapus
                       </button>
                     </div>
@@ -504,27 +514,58 @@ export default function MaintenanceList() {
 
       {/* MODAL CREATE/EDIT */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-[2px] flex items-center justify-center z-50 px-4 py-6">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden border border-white/80">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Wrench className="w-4 h-4" />
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
+          style={{
+            background: "rgba(15,23,42,0.35)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) requestCloseModal();
+          }}
+        >
+          <style>{`
+            @keyframes maintenanceModalIn {
+              from { opacity: 0; transform: scale(0.95); }
+              to { opacity: 1; transform: scale(1); }
+            }
+            @keyframes maintenanceModalOut {
+              from { opacity: 1; transform: scale(1); }
+              to { opacity: 0; transform: scale(0.95); }
+            }
+          `}</style>
+          <div
+            className="bg-white w-full max-w-[680px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            style={{ animation: `${modalClosing ? "maintenanceModalOut" : "maintenanceModalIn"} 200ms ease-out forwards` }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="maintenance-modal-title"
+          >
+            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Wrench className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-gray-900">
+                  <h2 id="maintenance-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
                     {editTarget ? "Edit Maintenance" : "Tambah Maintenance"}
                   </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-sm text-gray-500 mt-1">
                     {editTarget ? "Perbarui detail maintenance yang masih berlangsung" : "Catat maintenance aset baru"}
                   </p>
                 </div>
               </div>
-              <button onClick={closeModal} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
+              <button
+                type="button"
+                onClick={requestCloseModal}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                aria-label="Tutup modal"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[calc(92vh-145px)]">
+            <div className="px-7 py-6 overflow-y-auto max-h-[calc(90vh-181px)] space-y-5">
               {errors.form && (
                 <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
                   {errors.form}
@@ -533,7 +574,7 @@ export default function MaintenanceList() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Aset <span className="text-red-500">*</span></label>
                 <select
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.asset_id ? "border-red-400" : "border-gray-200"}`}
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm bg-white focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${errors.asset_id ? "border-red-400" : "border-[#dbe2ea]"}`}
                   value={form.asset_id} onChange={(e) => setForm({ ...form, asset_id: e.target.value })}>
                   <option value="">-- Pilih Aset --</option>
                   {assets.map((a) => <option key={a.id} value={a.id}>{a.asset_code} — {a.asset_name}</option>)}
@@ -543,24 +584,24 @@ export default function MaintenanceList() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Tanggal <span className="text-red-500">*</span></label>
                 <input type="date"
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.date ? "border-red-400" : "border-gray-200"}`}
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${errors.date ? "border-red-400" : "border-[#dbe2ea]"}`}
                   value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                 {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date}</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi <span className="text-red-500">*</span></label>
                 <textarea
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none ${errors.description ? "border-red-400" : "border-gray-200"}`}
+                  className={`w-full border rounded-[10px] px-3 py-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition resize-none ${errors.description ? "border-red-400" : "border-[#dbe2ea]"}`}
                   placeholder="Jelaskan kerusakan atau tindakan maintenance..."
                   rows={3} value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })} />
                 {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description}</p>}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Biaya (Rp)</label>
                   <input type="number"
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.cost ? "border-red-400" : "border-gray-200"}`}
+                    className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${errors.cost ? "border-red-400" : "border-[#dbe2ea]"}`}
                     placeholder="0" value={form.cost}
                     onChange={(e) => setForm({ ...form, cost: e.target.value })} />
                   {errors.cost && <p className="text-red-500 text-xs mt-1">{errors.cost}</p>}
@@ -568,7 +609,7 @@ export default function MaintenanceList() {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">PIC / Teknisi <span className="text-red-500">*</span></label>
                   <input type="text"
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${errors.pic ? "border-red-400" : "border-gray-200"}`}
+                    className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${errors.pic ? "border-red-400" : "border-[#dbe2ea]"}`}
                     placeholder="Nama teknisi" value={form.pic}
                     onChange={(e) => setForm({ ...form, pic: e.target.value })} />
                   {errors.pic && <p className="text-red-500 text-xs mt-1">{errors.pic}</p>}
@@ -585,8 +626,8 @@ export default function MaintenanceList() {
                     ].map((s) => (
                       <button key={s.val} type="button"
                         onClick={() => setForm({ ...form, status: s.val })}
-                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition border ${
-                          form.status === s.val ? s.cls : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                        className={`flex-1 h-11 rounded-[10px] text-sm font-medium transition border ${
+                          form.status === s.val ? s.cls : "bg-white text-gray-500 border-[#dbe2ea] hover:bg-gray-50"
                         }`}>
                         {s.label}
                       </button>
@@ -596,10 +637,10 @@ export default function MaintenanceList() {
                 </div>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
+            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end gap-3">
+              <button onClick={requestCloseModal} className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
               <button onClick={handleSave}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2 shadow-sm">
+                className="h-11 px-5 text-sm font-medium text-white bg-[#2563eb] hover:bg-[#1d4ed8] rounded-[10px] transition flex items-center gap-2 shadow-sm">
                 <Check className="w-4 h-4" />
                 Simpan
               </button>
@@ -610,23 +651,32 @@ export default function MaintenanceList() {
 
       {/* MODAL DELETE */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="px-6 py-5 text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Trash2 className="w-6 h-6 text-red-500" />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
+        >
+          <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
+          <div
+            className="bg-white rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,.15)] w-full max-w-sm"
+            style={{ animation: "deleteModalIn 200ms ease-out forwards" }}
+            role="dialog" aria-modal="true"
+          >
+            <div className="px-6 py-6 text-center">
+              <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-7 h-7 text-red-500" />
               </div>
-              <h3 className="font-semibold text-gray-800 mb-1">Hapus Log Maintenance?</h3>
+              <h3 className="font-semibold text-gray-800 text-base mb-1">Hapus Log Maintenance?</h3>
               <p className="text-sm text-gray-500">
-                Apakah anda yakin ingin menghapus Data maintenance aset{" "}
-                <span className="font-medium text-gray-700">"{deleteTarget.asset?.asset_name || `ID ${deleteTarget.asset_id}`}"</span>{" "}
+                Apakah anda yakin ingin menghapus data maintenance aset{" "}
+                <span className="font-medium text-gray-700">"{deleteTarget.asset?.asset_name || `ID ${deleteTarget.asset_id}`}"</span>?
               </p>
             </div>
-            <div className="px-6 pb-5 flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
+            <div className="px-6 pb-6 flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
               <button
                 onClick={handleDelete}
-                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition"
               >
                 Hapus
               </button>

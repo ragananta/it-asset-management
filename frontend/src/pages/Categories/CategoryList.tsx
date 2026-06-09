@@ -151,21 +151,19 @@ export default function CategoryList() {
   }, [modalOpen]);
 
   useEffect(() => {
-    if (!modalOpen) return;
-
     let cancelled = false;
     api.get("/categories?per_page=500")
       .then((res) => {
         if (cancelled) return;
         const payload = res?.data?.data;
-        setAllCategories(payload?.data || (Array.isArray(payload) ? payload : categories));
+        setAllCategories(payload?.data || (Array.isArray(payload) ? payload : []));
       })
       .catch(() => {
-        if (!cancelled) setAllCategories(categories);
+        if (!cancelled) setAllCategories([]);
       });
 
     return () => { cancelled = true; };
-  }, [modalOpen, categories]);
+  }, [refreshKey]);
 
   // ── Modal ─────────────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -180,7 +178,7 @@ export default function CategoryList() {
     setModalOpen(true);
   };
   const closeModal = () => {
-    setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); setModalClosing(false); setAllCategories([]);
+    setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); setModalClosing(false);
   };
   const requestCloseModal = () => {
     if (modalClosing) return;
@@ -495,25 +493,34 @@ export default function CategoryList() {
 
       {/* MODAL DELETE */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="px-6 py-5 text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Trash2 className="w-6 h-6 text-red-500" />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
+        >
+          <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
+          <div
+            className="bg-white rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,.15)] w-full max-w-sm"
+            style={{ animation: "deleteModalIn 200ms ease-out forwards" }}
+            role="dialog" aria-modal="true"
+          >
+            <div className="px-6 py-6 text-center">
+              <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-7 h-7 text-red-500" />
               </div>
-              <h3 className="font-semibold text-gray-800 mb-1">Hapus Kategori?</h3>
+              <h3 className="font-semibold text-gray-800 text-base mb-1">Hapus Kategori?</h3>
               <p className="text-sm text-gray-500">
-                Apakah anda yakin ingin menghapus Kategori<span className="font-medium text-gray-700">"{deleteTarget.name}"</span>?
+                Apakah anda yakin ingin menghapus Kategori <span className="font-medium text-gray-700">"{deleteTarget.name}"</span>?
               </p>
             </div>
-            <div className="px-6 pb-5 flex gap-3">
+            <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
               >Batal</button>
               <button
                 onClick={handleDelete}
-                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition"
               >
                 Hapus
               </button>

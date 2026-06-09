@@ -467,6 +467,7 @@ class MasterAssetController extends Controller
             Cache::forget($key);
         }
         Cache::forget('assets:cache_keys');
+        Cache::forget('dashboard:index');
     }
 
     private function writeLog(Request $request, string $activity, string $description): void

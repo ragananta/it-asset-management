@@ -18,7 +18,6 @@ class AuditLog extends Model
         'pic',
     ];
 
-    // Relationships
     public function asset()
     {
         return $this->belongsTo(MasterAsset::class, 'asset_id');

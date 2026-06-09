@@ -38,6 +38,7 @@ class AssetAssignmentController extends Controller
                     'return_date',
                     'note',
                     'created_at',
+                    'deleted_at',
                 ]);
 
             if ($request->filled('asset_id')) {
@@ -63,13 +64,20 @@ class AssetAssignmentController extends Controller
 
             $query->orderBy('created_at', 'desc');
 
-            $perPage = min((int) $request->get('per_page', 15), 100);
+            $perPage  = min((int) $request->get('per_page', 15), 100);
             $cacheKey = 'assignments:index:' . md5($request->fullUrl());
-            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage) {
+
+            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($cacheKey, $query, $perPage) {
+                $keys = Cache::get('assignments:cache_keys', []);
+                if (!in_array($cacheKey, $keys)) {
+                    $keys[] = $cacheKey;
+                    Cache::put('assignments:cache_keys', $keys, now()->addHours(1));
+                }
                 return $query->paginate($perPage);
             });
 
             return $this->successResponse($data, 'Data penugasan aset berhasil diambil');
+
         } catch (\Exception $e) {
             return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
@@ -105,6 +113,7 @@ class AssetAssignmentController extends Controller
             $assignment = AssetAssignment::create($request->validated());
 
             $asset->update(['status' => 'borrowed']);
+            $this->clearAssignmentCache();
 
             $this->writeLog($request, 'create_data', "Aset '{$asset->asset_name}' ditugaskan kepada '{$assignment->user_name}'");
 
@@ -153,6 +162,7 @@ class AssetAssignmentController extends Controller
             if ($wasNotReturned && $nowReturned) {
                 $assignment->asset?->update(['status' => 'active']);
             }
+            $this->clearAssignmentCache();
 
             $this->writeLog($request, 'update_data', "Penugasan aset ID {$id} berhasil diperbarui");
 
@@ -187,6 +197,7 @@ class AssetAssignmentController extends Controller
             }
 
             $assignment->delete();
+            $this->clearAssignmentCache();
 
             $this->writeLog($request, 'delete_data', "Penugasan aset ID {$id} berhasil dihapus");
 
@@ -211,5 +222,22 @@ class AssetAssignmentController extends Controller
             'ip_address'  => $request->ip(),
             'user_agent'  => $request->userAgent(),
         ]);
+    }
+
+    private function clearAssignmentCache(): void
+    {
+        $keys = Cache::get('assignments:cache_keys', []);
+        foreach ($keys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('assignments:cache_keys');
+        Cache::forget('dashboard:index');
+
+        // Also clear asset cache as assignment changes asset status
+        $assetKeys = Cache::get('assets:cache_keys', []);
+        foreach ($assetKeys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('assets:cache_keys');
     }
 }

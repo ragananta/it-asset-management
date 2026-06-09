@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/api/axios";
 import {
   Package, CheckCircle, AlertTriangle, Wrench,
-  UserCheck, Tag, TrendingUp, Download,
+  UserCheck, Tag, TrendingUp, Download, RefreshCw,
 } from "lucide-react";
 
 interface Stats {
@@ -37,25 +37,26 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const fetchedRef = useRef(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
+    let cancelled = false;
 
     const fetchDashboard = async () => {
       try {
-        const res = await api.get("/dashboard");
-        setData(res?.data?.data || null);
+        setLoading(true);
+        const res = await api.get("/dashboard", { noCache: true } as any);
+        if (!cancelled) setData(res?.data?.data || null);
       } catch (err) {
         console.error("ERROR fetch dashboard:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchDashboard();
-  }, []);
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
   // ── Export All ────────────────────────────────────────────────────────────
   const handleExportAll = async () => {
@@ -113,14 +114,24 @@ export default function Dashboard() {
           <h2 className="text-xl font-bold text-gray-800">Dashboard</h2>
           <p className="text-sm text-gray-400 mt-0.5">Ringkasan data IT Asset Management</p>
         </div>
-        <button
-          onClick={handleExportAll}
-          disabled={exporting}
-          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50"
-        >
-          <Download className="w-4 h-4" />
-          {exporting ? "Menyiapkan..." : "Export Semua"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setRefreshKey((k) => k + 1)}
+            disabled={loading}
+            title="Refresh data"
+            className="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 shadow-sm flex items-center justify-center transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            onClick={handleExportAll}
+            disabled={exporting}
+            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? "Menyiapkan..." : "Export Semua"}
+          </button>
+        </div>
       </div>
 
       {/* STATS CARDS */}

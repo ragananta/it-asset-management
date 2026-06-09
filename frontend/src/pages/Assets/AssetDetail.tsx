@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import {
@@ -69,9 +69,11 @@ export default function AssetDetail() {
 
   // property modal
   const [propModalOpen, setPropModalOpen] = useState(false);
+  const [propModalClosing, setPropModalClosing] = useState(false);
   const [propEditTarget, setPropEditTarget] = useState<Property | null>(null);
-  const [propForm, setPropForm] = useState<PropertyForm>(emptyPropForm);
+  const [propForm, setPropForm] = useState<PropertyForm>(propForm => propForm || emptyPropForm);
   const [propErrors, setPropErrors] = useState<Record<string, string>>({});
+  const propNameInputRef = useRef<HTMLInputElement>(null);
 
   // delete property
   const [propDeleteTarget, setPropDeleteTarget] = useState<Property | null>(null);
@@ -95,6 +97,7 @@ export default function AssetDetail() {
 
   // ── Property modal ────────────────────────────────────────────────────────
   const openPropCreate = () => {
+    setPropModalClosing(false);
     setPropEditTarget(null);
     setPropForm(emptyPropForm);
     setPropErrors({});
@@ -102,6 +105,7 @@ export default function AssetDetail() {
   };
 
   const openPropEdit = (prop: Property) => {
+    setPropModalClosing(false);
     setPropEditTarget(prop);
     setPropForm({ property_name: prop.property_name, value: prop.value, note: prop.note || "" });
     setPropErrors({});
@@ -113,7 +117,36 @@ export default function AssetDetail() {
     setPropEditTarget(null);
     setPropForm(emptyPropForm);
     setPropErrors({});
+    setPropModalClosing(false);
   };
+
+  const requestClosePropModal = () => {
+    if (propModalClosing) return;
+    setPropModalClosing(true);
+    window.setTimeout(() => {
+      closePropModal();
+    }, 200);
+  };
+
+  // Autofocus dan ESC key handler
+  useEffect(() => {
+    if (!propModalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusTimer = window.setTimeout(() => propNameInputRef.current?.focus(), 80);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") requestClosePropModal();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [propModalOpen, propModalClosing]);
 
   // ── Save property ─────────────────────────────────────────────────────────
   const handlePropSave = async () => {
@@ -341,25 +374,67 @@ export default function AssetDetail() {
 
       {/* MODAL ADD/EDIT PROPERTY */}
       {propModalOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-800">
-                {propEditTarget ? `Edit Property — ${propEditTarget.property_name}` : "Tambah Property"}
-              </h2>
-              <button onClick={closePropModal} className="text-gray-400 hover:text-gray-600 transition">
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${propModalClosing ? "opacity-0" : "opacity-100"}`}
+          style={{
+            background: "rgba(15,23,42,0.35)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) requestClosePropModal();
+          }}
+        >
+          <style>{`
+            @keyframes propModalIn {
+              from { opacity: 0; transform: scale(0.95); }
+              to { opacity: 1; transform: scale(1); }
+            }
+            @keyframes propModalOut {
+              from { opacity: 1; transform: scale(1); }
+              to { opacity: 0; transform: scale(0.95); }
+            }
+          `}</style>
+          <div
+            className="bg-white w-full max-w-[500px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            style={{ animation: `${propModalClosing ? "propModalOut" : "propModalIn"} 200ms ease-out forwards` }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="prop-modal-title"
+          >
+            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Hash className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 id="prop-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
+                    {propEditTarget ? "Edit Property" : "Tambah Property"}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {propEditTarget ? "Perbarui detail property aset Anda" : "Tambahkan spesifikasi detail baru"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={requestClosePropModal}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                aria-label="Tutup modal"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-7 py-6 overflow-y-auto max-h-[calc(90vh-181px)] space-y-5">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Nama Property <span className="text-red-500">*</span>
                 </label>
                 <input
+                  ref={propNameInputRef}
                   type="text"
-                  placeholder="contoh: RAM, IP Address, Warna"
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${propErrors.property_name ? "border-red-400" : "border-gray-200"}`}
+                  placeholder="contoh: RAM, IP Address, OS"
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${propErrors.property_name ? "border-red-400" : "border-[#dbe2ea]"}`}
                   value={propForm.property_name}
                   onChange={(e) => setPropForm({ ...propForm, property_name: e.target.value })}
                 />
@@ -373,8 +448,8 @@ export default function AssetDetail() {
                 </label>
                 <input
                   type="text"
-                  placeholder="contoh: 16GB, 192.168.1.10, Hitam"
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 ${propErrors.value ? "border-red-400" : "border-gray-200"}`}
+                  placeholder="contoh: 16GB, 192.168.1.10, Windows 11"
+                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${propErrors.value ? "border-red-400" : "border-[#dbe2ea]"}`}
                   value={propForm.value}
                   onChange={(e) => setPropForm({ ...propForm, value: e.target.value })}
                 />
@@ -389,22 +464,23 @@ export default function AssetDetail() {
                 <input
                   type="text"
                   placeholder="contoh: IP statis kantor"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full h-12 border border-[#dbe2ea] rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition"
                   value={propForm.note}
                   onChange={(e) => setPropForm({ ...propForm, note: e.target.value })}
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end gap-3">
               <button
-                onClick={closePropModal}
-                className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                onClick={requestClosePropModal}
+                className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
               >
                 Batal
               </button>
               <button
                 onClick={handlePropSave}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
+                disabled={!propForm.property_name?.trim() || !propForm.value?.trim()}
+                className="h-11 px-5 text-sm font-medium text-white bg-[#2563eb] hover:bg-[#1d4ed8] rounded-[10px] transition flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
                 {propEditTarget ? "Simpan Perubahan" : "Simpan"}
@@ -416,29 +492,38 @@ export default function AssetDetail() {
 
       {/* MODAL DELETE PROPERTY */}
       {propDeleteTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="px-6 py-5 text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Trash2 className="w-6 h-6 text-red-500" />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setPropDeleteTarget(null); }}
+        >
+          <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
+          <div
+            className="bg-white rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,.15)] w-full max-w-sm"
+            style={{ animation: "deleteModalIn 200ms ease-out forwards" }}
+            role="dialog" aria-modal="true"
+          >
+            <div className="px-6 py-6 text-center">
+              <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-7 h-7 text-red-500" />
               </div>
-              <h3 className="font-semibold text-gray-800 mb-1">Hapus Property?</h3>
+              <h3 className="font-semibold text-gray-800 text-base mb-1">Hapus Property?</h3>
               <p className="text-sm text-gray-500">
                 Property{" "}
                 <span className="font-medium text-gray-700">"{propDeleteTarget.property_name}"</span>{" "}
                 akan dihapus permanen.
               </p>
             </div>
-            <div className="px-6 pb-5 flex gap-3">
+            <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={() => setPropDeleteTarget(null)}
-                className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
               >
                 Batal
               </button>
               <button
                 onClick={handlePropDelete}
-                className="flex-1 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition"
               >
                 Hapus
               </button>

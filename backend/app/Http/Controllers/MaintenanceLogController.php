@@ -53,6 +53,7 @@ class MaintenanceLogController extends Controller
                             ->orWhere('asset_code', 'like', "%{$search}%")
                       );
                 });
+
             }
 
             if ($request->filled('date_from') && $request->filled('date_to')) {
@@ -62,7 +63,12 @@ class MaintenanceLogController extends Controller
             // ── Total biaya untuk halaman ini ─────────────────────────────
             $perPage = min((int) $request->get('per_page', 15), 100);
             $cacheKey = 'maintenance:index:' . md5($request->fullUrl());
-            $payload = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage) {
+            $payload = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($cacheKey, $query, $perPage) {
+                $keys = Cache::get('maintenance:cache_keys', []);
+                if (!in_array($cacheKey, $keys)) {
+                    $keys[] = $cacheKey;
+                    Cache::put('maintenance:cache_keys', $keys, now()->addHours(1));
+                }
                 return [
                     'total_cost' => (float) (clone $query)->sum('cost'),
                     'logs' => $query->paginate($perPage),
@@ -104,6 +110,7 @@ class MaintenanceLogController extends Controller
 
             $log = MaintenanceLog::create($request->validated());
             $asset->update(['condition_status' => 'under_maintenance']);
+            $this->clearMaintenanceCache();
 
             $this->writeLog(
                 $request, 'create_data',
@@ -162,6 +169,7 @@ class MaintenanceLogController extends Controller
             }
 
             $log->update($request->validated());
+            $this->clearMaintenanceCache();
 
             $this->writeLog($request, 'update_data', "Maintenance log ID {$id} berhasil diperbarui");
 
@@ -191,6 +199,7 @@ class MaintenanceLogController extends Controller
             if (!$stillOngoing) {
                 MasterAsset::where('id', $assetId)->update(['condition_status' => 'good']);
             }
+            $this->clearMaintenanceCache();
 
             $this->writeLog($request, 'delete_data', "Maintenance log ID {$id} berhasil dihapus");
 
@@ -216,5 +225,22 @@ class MaintenanceLogController extends Controller
             'ip_address'  => $request->ip(),
             'user_agent'  => $request->userAgent(),
         ]);
+    }
+
+    private function clearMaintenanceCache(): void
+    {
+        $keys = Cache::get('maintenance:cache_keys', []);
+        foreach ($keys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('maintenance:cache_keys');
+        Cache::forget('dashboard:index');
+
+        // Also clear asset cache as maintenance status affects asset conditions
+        $assetKeys = Cache::get('assets:cache_keys', []);
+        foreach ($assetKeys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('assets:cache_keys');
     }
 }

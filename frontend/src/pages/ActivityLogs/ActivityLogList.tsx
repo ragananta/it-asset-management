@@ -349,18 +349,18 @@ export default function ActivityLogList() {
       />
 
       {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-sm table-fixed">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12">NO</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[220px]">User</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[150px]">Aktivitas</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase min-w-[180px]">User</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-36">Aktivitas</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Deskripsi</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[130px]">IP Address</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[110px]">Browser</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[160px]">Waktu</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[100px]">Detail</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-32">IP Address</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-24">Browser</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40">Waktu</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-20">Detail</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">

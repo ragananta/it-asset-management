@@ -21,7 +21,12 @@ class CategoryController extends Controller
         try {
             if ($request->get('mode') === 'options') {
                 $cacheKey = 'categories:options:' . md5($request->fullUrl());
-                $data = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($request) {
+                $data = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($cacheKey, $request) {
+                    $keys = Cache::get('categories:option_keys', []);
+                    if (!in_array($cacheKey, $keys)) {
+                        $keys[] = $cacheKey;
+                        Cache::put('categories:option_keys', $keys, now()->addHours(24));
+                    }
                     $limit = min((int) $request->get('limit', 100), 500);
 
                     return Category::query()
@@ -59,7 +64,12 @@ class CategoryController extends Controller
 
             $perPage = min((int) $request->get('per_page', 15), 100);
             $cacheKey = 'categories:index:' . md5($request->fullUrl());
-            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($query, $perPage, $request) {
+            $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($cacheKey, $query, $perPage, $request) {
+                $keys = Cache::get('categories:cache_keys', []);
+                if (!in_array($cacheKey, $keys)) {
+                    $keys[] = $cacheKey;
+                    Cache::put('categories:cache_keys', $keys, now()->addHours(1));
+                }
                 return $request->boolean('simple')
                     ? $query->simplePaginate($perPage)
                     : $query->paginate($perPage);
@@ -101,7 +111,7 @@ class CategoryController extends Controller
             }
 
             $category = Category::create($data);
-            Cache::flush();
+            $this->clearCategoryCache();
 
             $this->writeLog($request, 'create_data', "Kategori '{$category->name}' berhasil ditambahkan");
 
@@ -129,7 +139,7 @@ class CategoryController extends Controller
             }
 
             $category->update($data);
-            Cache::flush();
+            $this->clearCategoryCache();
 
             $this->writeLog($request, 'update_data', "Kategori '{$category->name}' berhasil diperbarui");
 
@@ -158,7 +168,7 @@ class CategoryController extends Controller
             $name = $category->name;
             $category->delete(); // soft delete — data tidak hilang permanen
 
-            Cache::flush();
+            $this->clearCategoryCache();
 
             $this->writeLog($request, 'delete_data', "Kategori '{$name}' berhasil dihapus");
 
@@ -181,7 +191,7 @@ class CategoryController extends Controller
             }
 
             $category->restore();
-            Cache::flush();
+            $this->clearCategoryCache();
 
             $this->writeLog($request, 'update_data', "Kategori '{$category->name}' berhasil dipulihkan");
 
@@ -200,6 +210,23 @@ class CategoryController extends Controller
             'ip_address'  => $request->ip(),
             'user_agent'  => $request->userAgent(),
         ]);
+    }
+
+    private function clearCategoryCache(): void
+    {
+        $keys = Cache::get('categories:cache_keys', []);
+        foreach ($keys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('categories:cache_keys');
+
+        $optionKeys = Cache::get('categories:option_keys', []);
+        foreach ($optionKeys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('categories:option_keys');
+
+        Cache::forget('dashboard:index');
     }
 
     private function duplicateCategoryResponse(array $data, ?int $ignoreId = null)
