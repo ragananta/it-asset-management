@@ -22,6 +22,7 @@ const PAGE_NAMES: Record<string, string> = {
   "/categories":  "Categories",
   "/maintenance": "Maintenance",
   "/assignments": "Assignments",
+  "/employee-assets": "Employee Assets",
   "/audit-logs":  "Audit Logs",
   "/logs":        "Activity Logs",
 };
@@ -71,7 +72,7 @@ export default function MainLayout() {
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 text-xs font-bold uppercase">
+              <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-xs font-bold uppercase">
                 {userName.charAt(0)}
               </div>
               <div className="text-right hidden sm:block">

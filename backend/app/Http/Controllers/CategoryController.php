@@ -30,7 +30,7 @@ class CategoryController extends Controller
                     $limit = min((int) $request->get('limit', 100), 500);
 
                     return Category::query()
-                        ->select(['id', 'name', 'code'])
+                        ->select(['id', 'name', 'code', 'deleted_at'])
                         ->where('is_active', true)
                         ->orderBy('name')
                         ->limit($limit)
@@ -62,6 +62,19 @@ class CategoryController extends Controller
                 $query->where('is_active', $request->boolean('is_active'));
             }
 
+            // Sorting Database dinamis dengan whitelist untuk keamanan
+            $sortBy = $request->get('sort_by', 'name');
+            $sortOrder = strtolower($request->get('sort_order', 'asc')) === 'asc' ? 'asc' : 'desc';
+            $allowedSorts = ['name', 'code', 'is_active', 'created_at', 'updated_at'];
+            if (in_array($sortBy, $allowedSorts)) {
+                $query->orderBy($sortBy, $sortOrder);
+                if ($sortBy !== 'id') {
+                    $query->orderBy('id', 'desc');
+                }
+            } else {
+                $query->orderBy('name', 'asc');
+            }
+
             $perPage = min((int) $request->get('per_page', 15), 100);
             $cacheKey = 'categories:index:' . md5($request->fullUrl());
             $data = Cache::remember($cacheKey, now()->addSeconds(10), function () use ($cacheKey, $query, $perPage, $request) {
@@ -80,7 +93,6 @@ class CategoryController extends Controller
             return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
     }
-
     /**
      * GET /api/categories/{id}
      */

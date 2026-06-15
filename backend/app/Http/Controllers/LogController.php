@@ -16,6 +16,15 @@ class LogController extends Controller
     {
         try {
             $query = Log::with('user:id,name,email')
+                ->select([
+                    'id',
+                    'user_id',
+                    'activity',
+                    'description',
+                    'ip_address',
+                    'user_agent',
+                    'created_at',
+                ])
                 ->orderBy('created_at', 'desc');
 
             if ($request->has('user_id')) {

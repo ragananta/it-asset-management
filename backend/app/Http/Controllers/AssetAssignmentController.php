@@ -28,7 +28,9 @@ class AssetAssignmentController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = AssetAssignment::with('asset:id,asset_name,asset_code')
+            $query = AssetAssignment::with(['asset' => function ($q) {
+                $q->withTrashed()->with('category:id,name,code')->select(['id', 'asset_name', 'asset_code', 'category_id', 'condition_status', 'status', 'deleted_at']);
+            }])
                 ->select([
                     'id',
                     'asset_id',
@@ -62,7 +64,18 @@ class AssetAssignmentController extends Controller
                 $query->whereNull('return_date');
             }
 
-            $query->orderBy('created_at', 'desc');
+            // Sorting Database dinamis dengan whitelist untuk keamanan
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = strtolower($request->get('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+            $allowedSorts = ['user_name', 'phone', 'assign_date', 'return_date', 'created_at', 'updated_at'];
+            if (in_array($sortBy, $allowedSorts)) {
+                $query->orderBy($sortBy, $sortOrder);
+                if ($sortBy !== 'id') {
+                    $query->orderBy('id', 'desc');
+                }
+            } else {
+                $query->orderBy('created_at', 'desc');
+            }
 
             $perPage  = min((int) $request->get('per_page', 15), 100);
             $cacheKey = 'assignments:index:' . md5($request->fullUrl());
@@ -141,6 +154,10 @@ class AssetAssignmentController extends Controller
 
             if (!$assignment) {
                 return $this->notFoundResponse('Penugasan aset tidak ditemukan');
+            }
+
+            if ($assignment->return_date !== null) {
+                return $this->errorResponse('Peminjaman yang sudah dikembalikan tidak dapat diedit', 422);
             }
 
             $wasNotReturned = is_null($assignment->return_date);

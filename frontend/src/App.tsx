@@ -14,6 +14,7 @@ const AssetDetail    = lazy(() => import("./pages/Assets/AssetDetail"));
 const CategoryList   = lazy(() => import("./pages/Categories/CategoryList"));
 const MaintenanceList = lazy(() => import("./pages/Maintenance/MaintenanceList"));
 const AssignmentList = lazy(() => import("./pages/Assignments/AssignmentList"));
+const AssetsByEmployee = lazy(() => import("./pages/Reports/AssetsByEmployee"));
 const AuditLogList   = lazy(() => import("./pages/AuditLogs/AuditLogList"));
 const ActivityLogList = lazy(() => import("./pages/ActivityLogs/ActivityLogList"));
 
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/categories"  element={<CategoryList />} />
             <Route path="/maintenance" element={<MaintenanceList />} />
             <Route path="/assignments" element={<AssignmentList />} />
+            <Route path="/employee-assets" element={<AssetsByEmployee />} />
             <Route path="/audit-logs"  element={<AuditLogList />} />
             <Route path="/logs"        element={<ActivityLogList />} />
           </Route>

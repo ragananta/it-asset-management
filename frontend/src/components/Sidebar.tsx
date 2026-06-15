@@ -4,6 +4,7 @@ import {
   Tag,
   Wrench,
   UserCheck,
+  Users,
   ClipboardList,
   ActivitySquare,
 } from "lucide-react";
@@ -19,6 +20,7 @@ export default function Sidebar() {
     { name: "Assets",         path: "/assets",       icon: Package },
     { name: "Maintenance",    path: "/maintenance",  icon: Wrench },
     { name: "Assignments",    path: "/assignments",  icon: UserCheck },
+    { name: "Employee Assets", path: "/employee-assets", icon: Users },
     { name: "Audit Logs",     path: "/audit-logs",   icon: ClipboardList },
     { name: "Activity Logs",  path: "/logs",         icon: ActivitySquare },
   ];
@@ -50,15 +52,15 @@ export default function Sidebar() {
               to={menu.path}
               className={`relative flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all
               ${active
-                ? "bg-yellow-50 text-yellow-700 font-semibold"
+                ? "bg-brand-50 text-brand-700 font-semibold"
                 : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"}
             `}
             >
               {/* Active indicator bar */}
               {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-yellow-500" />
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand-500" />
               )}
-              <Icon size={17} className={active ? "text-yellow-600" : ""} />
+              <Icon size={17} className={active ? "text-brand-600" : ""} />
               {menu.name}
             </Link>
           );

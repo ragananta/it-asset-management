@@ -38,6 +38,8 @@ class DashboardController extends Controller
 
                 $categoryChart = DB::table('master_assets')
                     ->join('categories', 'master_assets.category_id', '=', 'categories.id')
+                    ->whereNull('master_assets.deleted_at')
+                    ->whereNull('categories.deleted_at')
                     ->select('categories.name as label', DB::raw('COUNT(*) as value'))
                     ->groupBy('categories.id', 'categories.name')
                     ->orderByDesc('value')

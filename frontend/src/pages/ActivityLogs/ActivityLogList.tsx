@@ -349,7 +349,7 @@ export default function ActivityLogList() {
       />
 
       {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
@@ -376,13 +376,13 @@ export default function ActivityLogList() {
                 return (
                   <tr
                     key={log.id}
-                    className="hover:bg-blue-50/30 transition cursor-pointer"
+                    className="hover:bg-brand-50/15 transition cursor-pointer"
                     onClick={() => toggleRow(log.id)}
                   >
                     <td className="px-5 py-4 text-gray-400 text-xs">{startIndex + idx + 1}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-semibold uppercase shrink-0">
+                        <div className="w-7 h-7 rounded-lg bg-brand-100 flex items-center justify-center text-brand-700 text-xs font-semibold uppercase shrink-0">
                           {(log.user?.name || "?").charAt(0)}
                         </div>
                         <div className="min-w-0">
@@ -403,7 +403,7 @@ export default function ActivityLogList() {
                         {log.description || "-"}
                       </p>
                       {log.description && log.description.length > 80 && (
-                        <span className="text-indigo-400 text-xs mt-0.5 block">
+                        <span className="text-brand-600 text-xs mt-0.5 block hover:underline">
                           {isExpanded ? "↑ Tutup" : "↓ Selengkapnya"}
                         </span>
                       )}
@@ -427,7 +427,7 @@ export default function ActivityLogList() {
                       <div className="flex items-center justify-center">
                         <button
                           onClick={() => openDetail(log)}
-                          className="text-indigo-600 text-xs bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition"
+                          className="text-brand-600 text-xs bg-brand-50 hover:bg-brand-100 px-3 py-1 rounded-full transition"
                         >
                           Lihat
                         </button>
@@ -444,12 +444,7 @@ export default function ActivityLogList() {
       {/* MODAL DETAIL */}
       {detailLog && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${detailClosing ? "opacity-0" : "opacity-100"}`}
-          style={{
-            background: "rgba(15,23,42,0.35)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-          }}
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6 transition-opacity duration-200 ${detailClosing ? "opacity-0" : "opacity-100"}`}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) requestCloseDetail();
           }}
@@ -465,7 +460,7 @@ export default function ActivityLogList() {
             }
           `}</style>
           <div
-            className="bg-white w-full max-w-[560px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            className="bg-white w-full max-w-[560px] max-h-[90vh] rounded-xl shadow-[0_25px_50px_rgba(0,0,0,0.15)] overflow-hidden"
             style={{ animation: `${detailClosing ? "activityDetailModalOut" : "activityDetailModalIn"} 200ms ease-out forwards` }}
             role="dialog"
             aria-modal="true"
@@ -473,7 +468,7 @@ export default function ActivityLogList() {
           >
             <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <div className="w-11 h-11 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
                   <ActivitySquare className="w-5 h-5" />
                 </div>
                 <div>
@@ -491,8 +486,8 @@ export default function ActivityLogList() {
               </button>
             </div>
             <div className="px-7 py-6 space-y-5 overflow-y-auto max-h-[calc(90vh-191px)]">
-              <div className="flex items-center gap-4 bg-indigo-50 rounded-2xl p-4">
-                <div className="w-12 h-12 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 text-sm font-bold uppercase shrink-0">
+              <div className="flex items-center gap-4 bg-brand-50/50 rounded-xl p-4">
+                <div className="w-12 h-12 rounded-lg bg-brand-100 flex items-center justify-center text-brand-700 text-sm font-bold uppercase shrink-0">
                   {(detailLog.user?.name || "?").charAt(0)}
                 </div>
                 <div className="min-w-0">
@@ -526,7 +521,7 @@ export default function ActivityLogList() {
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-1">User Agent</p>
-                <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-4 break-all leading-relaxed">
+                <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-4 break-all leading-relaxed">
                   {detailLog.user_agent || "-"}
                 </p>
               </div>
@@ -534,7 +529,7 @@ export default function ActivityLogList() {
             <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end">
               <button
                 onClick={requestCloseDetail}
-                className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
+                className="h-11 px-5 text-sm font-medium text-gray-755 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition"
               >
                 Tutup
               </button>

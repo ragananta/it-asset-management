@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
-import { Search, Plus, Pencil, Trash2, X, Check, Tag } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, Tag, Save } from "lucide-react";
 import { usePolling } from "../../hooks/usePolling";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
@@ -239,7 +239,6 @@ export default function CategoryList() {
             setToast(message);
           });
       }
-
     } catch (err: any) {
       if (err?.response?.data?.errors) {
         const apiErrors: Record<string, string> = {};
@@ -258,27 +257,26 @@ export default function CategoryList() {
     const prevCategories = categories;
     const prevTotal = totalData;
 
-    const updated = categories.filter((item) => item.id !== deleteTarget.id);
-    setCategories(updated);
-    setTotalData((t) => t - 1);
-    const newPage = updated.length === 0 && currentPage > 1 ? currentPage - 1 : currentPage;
-    setCurrentPage(newPage);
-    setDeleteTarget(null); // tutup modal langsung
+    try {
+      const updated = categories.filter((item) => item.id !== deleteTarget.id);
+      setCategories(updated);
+      setTotalData((t) => t - 1);
 
-    api.delete(`/categories/${deleteTarget.id}`).catch((err) => {
+      const newPage = updated.length === 0 && currentPage > 1 ? currentPage - 1 : currentPage;
+      setCurrentPage(newPage);
+
+      await api.delete(`/categories/${deleteTarget.id}`);
+      setDeleteTarget(null);
+    } catch (err: any) {
+      console.error("ERROR delete category:", err);
       setCategories(prevCategories);
       setTotalData(prevTotal);
-      alert(err?.response?.data?.message || "Gagal menghapus kategori");
-    });
+      setToast(err?.response?.data?.message || "Gagal menghapus kategori");
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {toast && (
-        <div className="fixed right-6 top-6 z-[60] rounded-xl border border-red-100 bg-white px-4 py-3 text-sm font-medium text-red-600 shadow-lg">
-          {toast}
-        </div>
-      )}
 
       {/* SEARCH + ACTION */}
       <div className="flex justify-end items-center gap-3 mb-5">
@@ -286,7 +284,7 @@ export default function CategoryList() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             placeholder="Cari kategori..."
-            className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+            className="w-full h-10 pl-9 pr-9 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
             value={searchInput}
             onChange={(e) => handleSearchInput(e.target.value)}
           />
@@ -302,7 +300,7 @@ export default function CategoryList() {
 
         <button
           onClick={openCreate}
-          className="bg-blue-600 hover:bg-blue-700 transition text-white px-5 py-2.5 rounded-full text-sm font-medium shadow flex items-center gap-2"
+          className="bg-blue-600 hover:bg-blue-700 transition text-white h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> Tambah
         </button>
@@ -319,7 +317,7 @@ export default function CategoryList() {
       />
 
       {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
@@ -340,7 +338,7 @@ export default function CategoryList() {
               </td></tr>
             ) : (
               categories.map((cat, idx) => (
-                <tr key={cat.id} className="hover:bg-blue-50/30 transition">
+                <tr key={cat.id} className="hover:bg-brand-50/15 transition">
                   <td className="px-5 py-4 text-gray-400 text-xs">{startIndex + idx + 1}</td>
                   <td className="px-5 py-4 font-mono text-xs text-gray-700">{cat.code || "-"}</td>
                   <td className="px-5 py-4 font-medium text-gray-800">{cat.name}</td>
@@ -356,7 +354,7 @@ export default function CategoryList() {
                     <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => openEdit(cat)}
-                        className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-3 py-1 rounded-full flex items-center gap-1 transition"
+                        className="text-purple-600 text-xs bg-purple-50 hover:bg-purple-100 px-3 py-1 rounded-full flex items-center gap-1 transition"
                       >
                         <Pencil className="w-3 h-3" /> Edit
                       </button>
@@ -378,12 +376,7 @@ export default function CategoryList() {
       {/* MODAL CREATE/EDIT */}
       {modalOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
-          style={{
-            background: "rgba(15,23,42,0.35)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-          }}
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) requestCloseModal();
           }}
@@ -399,91 +392,110 @@ export default function CategoryList() {
             }
           `}</style>
           <div
-            className="bg-white w-full max-w-[620px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            className="bg-white w-full max-w-[620px] max-h-[90vh] rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col"
             style={{ animation: `${modalClosing ? "categoryModalOut" : "categoryModalIn"} 200ms ease-out forwards` }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="category-modal-title"
           >
-            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-7 py-5 border-b border-[#eef2f7] bg-white shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Tag className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  {editTarget ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 </div>
-                <div>
-                  <h2 id="category-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
-                    {editTarget ? "Edit Kategori" : "Tambah Kategori"}
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {editTarget ? "Perbarui nama, kode, dan status kategori" : "Tambahkan kategori aset baru"}
-                  </p>
-                </div>
+                <h2 id="category-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
+                  {editTarget ? "Edit Data" : "Tambah Data"}
+                </h2>
               </div>
               <button
                 type="button"
                 onClick={requestCloseModal}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
                 aria-label="Tutup modal"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="px-7 py-6 overflow-y-auto max-h-[calc(90vh-181px)]">
-              <div className="grid grid-cols-1 gap-5">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Nama Kategori <span className="text-red-500">*</span></label>
-                <input
-                  ref={nameInputRef}
-                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${nameError ? "border-red-400" : "border-[#dbe2ea]"}`}
-                  placeholder="contoh: Laptop"
-                  value={form.name}
-                  onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((prev) => ({ ...prev, name: "" })); }}
-                  onBlur={() => setForm((prev) => ({ ...prev, name: normalizeName(prev.name) }))}
-                />
-                {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Kode <span className="text-red-500">*</span></label>
-                <input
-                  className={`w-full h-12 border rounded-[10px] px-3 text-sm uppercase focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${codeError ? "border-red-400" : "border-[#dbe2ea]"}`}
-                  placeholder="contoh: CAT-LPT"
-                  value={form.code}
-                  onChange={(e) => { setForm({ ...form, code: e.target.value.toUpperCase() }); setErrors((prev) => ({ ...prev, code: "" })); }}
-                  onBlur={() => setForm((prev) => ({ ...prev, code: normalizeCode(prev.code) }))}
-                />
-                {codeError && <p className="text-red-500 text-xs mt-1">{codeError}</p>}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi</label>
-                <textarea
-                  className="w-full min-h-[120px] border border-[#dbe2ea] rounded-[10px] px-3 py-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 resize-y"
-                  placeholder="Deskripsi singkat kategori..."
-                  rows={3}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="text-xs font-medium text-gray-600">Status Aktif</label>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, is_active: !form.is_active })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-teal-500" : "bg-gray-300"}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_active ? "translate-x-6" : "translate-x-1"}`} />
-                </button>
-                <span className="text-xs text-gray-500">{form.is_active ? "Aktif" : "Nonaktif"}</span>
-              </div>
+
+            {/* Modal Scrollable Content */}
+            <div className="px-7 py-6 overflow-y-auto flex-1 bg-slate-50/20">
+              {/* Inner Card Container */}
+              <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm">
+                {/* Card Section Header */}
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
+                  <Tag className="w-5 h-5 text-emerald-600" />
+                  <span className="font-semibold text-slate-800 text-sm">
+                    {editTarget ? "Edit Detail Kategori" : "Tambah Master Kategori"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-5">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nama Kategori <span className="text-red-500">*</span></label>
+                    <input
+                      ref={nameInputRef}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${nameError ? "border-red-400" : "border-gray-200"}`}
+                      placeholder="contoh: Laptop"
+                      value={form.name}
+                      onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((prev) => ({ ...prev, name: "" })); }}
+                      onBlur={() => setForm((prev) => ({ ...prev, name: normalizeName(prev.name) }))}
+                    />
+                    {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Kode <span className="text-red-500">*</span></label>
+                    <input
+                      className={`w-full h-12 border rounded-lg px-3 text-sm uppercase focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${codeError ? "border-red-400" : "border-gray-200"}`}
+                      placeholder="contoh: CAT-LPT"
+                      value={form.code}
+                      onChange={(e) => { setForm({ ...form, code: e.target.value.toUpperCase() }); setErrors((prev) => ({ ...prev, code: "" })); }}
+                      onBlur={() => setForm((prev) => ({ ...prev, code: normalizeCode(prev.code) }))}
+                    />
+                    {codeError && <p className="text-red-500 text-xs mt-1">{codeError}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Deskripsi</label>
+                    <textarea
+                      className="w-full min-h-[100px] border border-gray-200 rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 resize-y"
+                      placeholder="Deskripsi singkat kategori..."
+                      rows={3}
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <label className="text-xs font-semibold text-gray-600">Status Aktif</label>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, is_active: !form.is_active })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-brand-600" : "bg-gray-300"}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_active ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
+                    <span className="text-xs text-gray-500">{form.is_active ? "Aktif" : "Nonaktif"}</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end gap-3">
-              <button onClick={requestCloseModal} className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white px-7 py-4 border-t border-[#eef2f7] flex justify-end gap-3 shrink-0">
+              <button
+                onClick={requestCloseModal}
+                className="h-10 px-6 rounded-full bg-red-500 hover:bg-red-650 text-white text-sm font-semibold transition shadow-sm"
+              >
+                Batal
+              </button>
               <button
                 onClick={handleSave}
                 disabled={!isFormValid}
-                className="h-11 px-5 text-sm font-medium text-white bg-[#2563eb] hover:bg-[#1d4ed8] rounded-[10px] transition flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Check className="w-4 h-4" />
+                <Save className="w-4 h-4" />
                 Simpan
               </button>
             </div>
@@ -494,13 +506,12 @@ export default function CategoryList() {
       {/* MODAL DELETE */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6"
           onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
         >
           <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
           <div
-            className="bg-white rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,.15)] w-full max-w-sm"
+            className="bg-white rounded-xl shadow-[0_25px_50px_rgba(0,0,0,0.15)] w-full max-w-sm"
             style={{ animation: "deleteModalIn 200ms ease-out forwards" }}
             role="dialog" aria-modal="true"
           >
@@ -516,14 +527,12 @@ export default function CategoryList() {
             <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition"
               >Batal</button>
               <button
                 onClick={handleDelete}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition"
-              >
-                Hapus
-              </button>
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-655 hover:bg-red-705 rounded-lg transition"
+              >Hapus</button>
             </div>
           </div>
         </div>

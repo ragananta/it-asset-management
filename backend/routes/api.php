@@ -11,6 +11,7 @@ use App\Http\Controllers\AssetAssignmentController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\ReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -84,5 +85,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    // Reports
+    Route::get('/reports/assets-by-employee/export', [ReportController::class, 'exportByEmployee']);
+    Route::get('/reports/assets-by-employee', [ReportController::class, 'assetsByEmployee']);
 
 });

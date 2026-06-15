@@ -301,7 +301,7 @@ function TimelineYearGroups({
         const eventCount = yearGroup.months.reduce((sum, month) => sum + month.events.length, 0);
 
         return (
-          <div key={yearGroup.year} className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
+          <div key={yearGroup.year} className="rounded-xl border border-gray-100 overflow-hidden bg-white shadow-sm">
             <button
               onClick={() => setOpenYears((prev) => ({ ...prev, [yearGroup.year]: !isYearOpen }))}
               className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition"
@@ -331,7 +331,7 @@ function TimelineYearGroups({
                         return (
                           <div key={event.id} className="relative">
                             <span className={`absolute -left-[18px] top-4 w-3 h-3 rounded-full ring-4 ring-white ${style.dot}`} />
-                            <div className={`rounded-xl border bg-white transition ${isExpanded ? `${style.line} shadow-sm` : "border-gray-100 hover:border-gray-200"}`}>
+                            <div className={`rounded-lg border bg-white transition ${isExpanded ? `${style.line} shadow-sm` : "border-gray-100 hover:border-gray-250"}`}>
                               <button
                                 onClick={() => setExpandedId(isExpanded ? null : event.id)}
                                 className="w-full px-4 py-3 text-left"
@@ -475,7 +475,7 @@ const buildTimeline = (asset: Asset): TimelineEvent[] => {
       other:    <Info className="w-4 h-4" />,
     };
     const actionColorMap: Record<string, { color: string; bg: string; border: string }> = {
-      check:    { color: "text-blue-600",   bg: "bg-blue-100",   border: "border-blue-200" },
+      check:    { color: "text-brand-600",   bg: "bg-brand-50",   border: "border-brand-200" },
       replace:  { color: "text-orange-600", bg: "bg-orange-100", border: "border-orange-200" },
       repair:   { color: "text-yellow-600", bg: "bg-yellow-100", border: "border-yellow-200" },
       update:   { color: "text-teal-600",   bg: "bg-teal-100",   border: "border-teal-200" },
@@ -532,6 +532,7 @@ export default function AuditLogList() {
   const [timelineSearchInput, setTimelineSearchInput] = useState("");
   const [timelineSearch, setTimelineSearch] = useState("");
   const [timelinePage, setTimelinePage] = useState(1);
+  const [timelineRowsPerPage, setTimelineRowsPerPage] = useState(5);
   const [timelineTotal, setTimelineTotal] = useState(0);
   const [timelineLastPage, setTimelineLastPage] = useState(1);
   const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
@@ -637,7 +638,7 @@ export default function AuditLogList() {
         setTimelineLoading(true);
         const params = new URLSearchParams({
           page: String(timelinePage),
-          per_page: "20",
+          per_page: String(timelineRowsPerPage),
           sort: "desc",
         });
         if (timelineType !== "all") params.append("type", timelineType);
@@ -665,7 +666,7 @@ export default function AuditLogList() {
 
     fetchTimeline();
     return () => { cancelled = true; };
-  }, [selectedAsset?.id, timelineType, timelineSearch, timelinePage, timelineRefreshKey]);
+  }, [selectedAsset?.id, timelineType, timelineSearch, timelinePage, timelineRowsPerPage, timelineRefreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
   const timeline = selectedAsset ? buildTimeline(selectedAsset) : [];
@@ -674,8 +675,8 @@ export default function AuditLogList() {
     <div className="min-h-screen bg-gray-50 p-6">
 
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
-          <Package className="w-4 h-4 text-blue-600" />
+        <div className="w-9 h-9 rounded-lg bg-brand-50 flex items-center justify-center">
+          <Package className="w-4 h-4 text-brand-600" />
         </div>
         <div>
           <h1 className="text-base font-semibold text-gray-800">Riwayat Aset</h1>
@@ -692,7 +693,7 @@ export default function AuditLogList() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 placeholder="Cari aset..."
-                className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+                className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
                 value={searchInput}
                 onChange={(e) => handleSearchInput(e.target.value)}
               />
@@ -717,7 +718,7 @@ export default function AuditLogList() {
             className="mb-3"
           />
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             {loadingAssets ? (
               <div className="py-16 text-center text-gray-400 text-sm">Loading...</div>
             ) : assets.length === 0 ? (
@@ -731,24 +732,24 @@ export default function AuditLogList() {
                       key={a.id}
                       onClick={() => selectAsset(a.id)}
                       className={`w-full flex items-center justify-between px-5 py-4 text-left transition ${
-                        isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+                        isSelected ? "bg-brand-50/50" : "hover:bg-gray-50"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          isSelected ? "bg-blue-600" : "bg-gray-100"
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          isSelected ? "bg-brand-600" : "bg-gray-100"
                         }`}>
                           <Package className={`w-4 h-4 ${isSelected ? "text-white" : "text-gray-400"}`} />
                         </div>
                         <div>
-                          <p className={`text-sm font-medium ${isSelected ? "text-blue-700" : "text-gray-800"}`}>
+                          <p className={`text-sm font-medium ${isSelected ? "text-brand-700 font-semibold" : "text-gray-800"}`}>
                             {a.asset_name}
                           </p>
                           <p className="text-xs text-gray-400 font-mono">{a.asset_code}</p>
                         </div>
                       </div>
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition shrink-0 ${
-                        isSelected ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-400"
+                      <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-xs font-bold transition shrink-0 ${
+                        isSelected ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-400"
                       }`}>
                         {isSelected ? "−" : "+"}
                       </span>
@@ -785,7 +786,7 @@ export default function AuditLogList() {
                     </p>
                     <button
                       onClick={() => setTimelineRefreshKey((key) => key + 1)}
-                      className="w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-500 flex items-center justify-center transition"
+                      className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 flex items-center justify-center transition"
                       title="Refresh timeline"
                     >
                       <RefreshCw className={`w-4 h-4 ${timelineLoading ? "animate-spin" : ""}`} />
@@ -799,7 +800,7 @@ export default function AuditLogList() {
                         setTimelineType(e.target.value as TimelineCategory);
                         setTimelinePage(1);
                       }}
-                      className="sm:w-48 border border-gray-200 rounded-full px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      className="sm:w-48 border border-gray-200 rounded-full px-4 py-2 appearance-none text-sm text-gray-705 bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
                     >
                       {timelineFilters.map((filter) => (
                         <option key={filter.value} value={filter.value}>{filter.label}</option>
@@ -810,7 +811,7 @@ export default function AuditLogList() {
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <input
                         placeholder="Cari aktivitas..."
-                        className="w-full pl-9 pr-9 py-2 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        className="w-full pl-9 pr-9 py-2 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
                         value={timelineSearchInput}
                         onChange={(e) => handleTimelineSearchInput(e.target.value)}
                       />
@@ -834,7 +835,7 @@ export default function AuditLogList() {
                   <div className="py-14 text-center text-gray-400 text-sm">Memuat timeline...</div>
                 ) : timelineTotal === 0 ? (
                   <div className="py-14 text-center">
-                    <div className="w-12 h-12 rounded-full bg-gray-100 text-gray-300 flex items-center justify-center mx-auto mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 text-gray-300 flex items-center justify-center mx-auto mb-3">
                       <ClipboardCheck className="w-6 h-6" />
                     </div>
                     <p className="text-gray-400 text-sm">Belum ada aktivitas untuk aset ini.</p>
@@ -843,7 +844,7 @@ export default function AuditLogList() {
                         setTimelinePage(1);
                         setTimelineRefreshKey((key) => key + 1);
                       }}
-                      className="mt-3 inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline"
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs text-brand-600 hover:underline"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       Refresh
@@ -851,36 +852,28 @@ export default function AuditLogList() {
                   </div>
                 ) : (
                   <>
-                    <TimelineYearGroups
-                      groups={timelineGroups}
-                      expandedId={expandedId}
-                      setExpandedId={setExpandedId}
-                    />
-
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
-                      <span>Page {timelinePage} of {timelineLastPage}</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          disabled={timelinePage === 1}
-                          onClick={() => setTimelinePage((p) => Math.max(1, p - 1))}
-                          className="px-3 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
-                        >
-                          Sebelumnya
-                        </button>
-                        <button
-                          disabled={timelinePage === timelineLastPage}
-                          onClick={() => setTimelinePage((p) => Math.min(timelineLastPage, p + 1))}
-                          className="px-3 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
-                        >
-                          Berikutnya
-                        </button>
-                      </div>
+                    <div className="max-h-[480px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-gray-200">
+                      <TimelineYearGroups
+                        groups={timelineGroups}
+                        expandedId={expandedId}
+                        setExpandedId={setExpandedId}
+                      />
                     </div>
+
+                    <TablePagination
+                      currentPage={timelinePage}
+                      rowsPerPage={timelineRowsPerPage}
+                      totalData={timelineTotal}
+                      totalPages={timelineLastPage}
+                      onPageChange={setTimelinePage}
+                      onRowsPerPageChange={setTimelineRowsPerPage}
+                      className="mt-4 pt-4 border-t border-gray-100"
+                    />
                   </>
                 )}
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="font-semibold text-gray-800 text-base">{selectedAsset.asset_name}</p>
@@ -906,7 +899,7 @@ export default function AuditLogList() {
                 </div>
                 <button
                   onClick={() => navigate(`/assets/${selectedAsset.id}`)}
-                  className="mt-3 text-xs text-blue-600 hover:underline"
+                  className="mt-3 text-xs text-brand-600 hover:underline"
                 >
                   Lihat detail aset →
                 </button>

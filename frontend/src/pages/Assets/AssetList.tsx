@@ -240,7 +240,7 @@ export default function AssetList() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             placeholder="Cari asset..."
-            className="w-full pl-9 pr-20 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+            className="w-full h-10 pl-9 pr-20 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
             value={searchInput}
             onChange={(e) => handleSearchInput(e.target.value)}
           />
@@ -268,7 +268,7 @@ export default function AssetList() {
           </button>
 
           {filterOpen && (
-            <div className="absolute right-0 top-12 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 p-4 space-y-3">
+            <div className="absolute right-0 top-12 w-72 bg-white rounded-xl shadow-xl border border-gray-100 z-30 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-700">Filter Aset</p>
                 {activeFilterCount > 0 && (
@@ -280,7 +280,7 @@ export default function AssetList() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kategori</label>
                 <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
                   value={filters.category}
                   onChange={(e) => { setFilters((f) => ({ ...f, category: e.target.value })); setCurrentPage(1); }}
                 >
@@ -291,7 +291,7 @@ export default function AssetList() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kondisi</label>
                 <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
                   value={filters.condition}
                   onChange={(e) => { setFilters((f) => ({ ...f, condition: e.target.value })); setCurrentPage(1); }}
                 >
@@ -304,7 +304,7 @@ export default function AssetList() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
                 <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
                   value={filters.status}
                   onChange={(e) => { setFilters((f) => ({ ...f, status: e.target.value })); setCurrentPage(1); }}
                 >
@@ -328,7 +328,7 @@ export default function AssetList() {
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50"
+          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50"
         >
           <Download className="w-4 h-4" />
           {exporting ? "..." : "Export"}
@@ -337,7 +337,7 @@ export default function AssetList() {
         {/* Tambah */}
         <button
           onClick={openCreate}
-          className="bg-blue-600 hover:bg-blue-700 transition text-white px-5 py-2.5 rounded-full text-sm font-medium shadow flex items-center gap-2"
+          className="bg-blue-600 hover:bg-blue-700 transition text-white h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2"
         >
           + Tambah
         </button>
@@ -389,13 +389,13 @@ export default function AssetList() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12">NO</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kode</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Nama Asset</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kategori</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Kondisi</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[200px]">Aksi</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12 whitespace-nowrap">NO</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-36 whitespace-nowrap">Kode</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase min-w-[180px]">Nama Asset</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap">Kategori</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap">Kondisi</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap">Status</th>
+              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-52 whitespace-nowrap">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -409,24 +409,24 @@ export default function AssetList() {
               assets.map((a, idx) => (
                 <tr
                   key={a.id}
-                  className="hover:bg-blue-50/30 transition cursor-pointer"
+                  className="hover:bg-brand-50/15 transition cursor-pointer"
                   onClick={() => navigate(`/assets/${a.id}`)}
                 >
                   <td className="px-5 py-4 text-gray-400 text-xs">{startIndex + idx + 1}</td>
                   <td className="px-5 py-4 font-mono text-xs text-gray-700">{a.asset_code || "-"}</td>
                   <td className="px-5 py-4 font-medium text-gray-800">{a.asset_name || "-"}</td>
-                  <td className="px-5 py-4">
+                  <td className="px-5 py-4 text-center">
                     {a.category?.name
-                      ? <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase">{a.category.name}</span>
+                      ? <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full uppercase inline-flex items-center justify-center w-28 text-center">{a.category.name}</span>
                       : "-"}
                   </td>
-                  <td className="px-5 py-4">
-                    <span className={`text-xs px-2 py-1 rounded-full ${conditionColor[a.condition_status || ""] || "text-gray-500 bg-gray-100"}`}>
+                  <td className="px-5 py-4 text-center">
+                    <span className={`text-xs px-2.5 py-1 rounded-full inline-flex items-center justify-center w-28 text-center ${conditionColor[a.condition_status || ""] || "text-gray-500 bg-gray-100"}`}>
                       {conditionLabel[a.condition_status || ""] || a.condition_status || "-"}
                     </span>
                   </td>
-                  <td className="px-5 py-4">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[a.status || ""] || "text-gray-500 bg-gray-100"}`}>
+                  <td className="px-5 py-4 text-center">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium inline-flex items-center justify-center w-28 text-center ${statusColor[a.status || ""] || "text-gray-500 bg-gray-100"}`}>
                       {statusLabel[a.status || ""] || a.status || "-"}
                     </span>
                   </td>
@@ -438,7 +438,7 @@ export default function AssetList() {
                       >Detail</button>
                       <button
                         onClick={() => openEdit(a)}
-                        className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-3 py-1 rounded-full transition"
+                        className="text-purple-600 text-xs bg-purple-50 hover:bg-purple-100 px-3 py-1 rounded-full transition"
                       >Edit</button>
                       <button
                         onClick={() => setDeleteTarget(a)}
@@ -466,13 +466,12 @@ export default function AssetList() {
       {/* MODAL DELETE */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6"
           onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
         >
           <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
           <div
-            className="bg-white rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,.15)] w-full max-w-sm"
+            className="bg-white rounded-xl shadow-[0_25px_50px_rgba(0,0,0,0.15)] w-full max-w-sm"
             style={{ animation: "deleteModalIn 200ms ease-out forwards" }}
             role="dialog" aria-modal="true"
           >
@@ -488,12 +487,12 @@ export default function AssetList() {
             <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition"
               >Batal</button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition disabled:opacity-50"
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition disabled:opacity-50"
               >
                 {deleting ? "Menghapus..." : "Hapus"}
               </button>

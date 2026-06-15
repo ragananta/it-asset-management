@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../api/axios";
-import { Check, Loader2, Package, X } from "lucide-react";
+import { Check, Loader2, Package, X, Plus, Pencil, Save } from "lucide-react";
 
 const toDateInput = (val?: string | null): string => {
   if (!val) return "";
@@ -10,7 +10,7 @@ const toDateInput = (val?: string | null): string => {
 const inputClass = (error?: string, readonly = false) =>
   `w-full h-12 border ${
     error ? "border-red-400" : "border-gray-200"
-  } rounded-[10px] px-3 text-sm text-gray-800 focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${
+  } rounded-lg px-3 text-sm text-gray-800 focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${
     readonly ? "bg-gray-100 cursor-not-allowed text-gray-500" : "bg-white"
   }`;
 
@@ -268,12 +268,7 @@ export default function AssetModal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
-      style={{
-        background: "rgba(15,23,42,0.35)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-      }}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) requestClose();
       }}
@@ -289,209 +284,218 @@ export default function AssetModal({
         }
       `}</style>
       <div
-        className="flex max-h-[90vh] w-full max-w-[900px] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_25px_50px_rgba(0,0,0,.15)]"
+        className="flex max-h-[90vh] w-full max-w-[900px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_25px_50px_rgba(0,0,0,0.15)]"
         style={{ animation: `${modalClosing ? "assetModalOut" : "assetModalIn"} 200ms ease-out forwards` }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="asset-modal-title"
       >
-        <div className="flex items-center justify-between border-b border-[#eef2f7] bg-white px-7 py-6">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-[#eef2f7] bg-white px-7 py-5 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-              <Package className="h-5 w-5" />
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              {isEdit ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             </div>
-            <div>
-              <h2 id="asset-modal-title" className="text-lg font-semibold leading-tight text-gray-900">
-                {isEdit ? `Edit Aset - ${editAsset?.asset_code}` : "Tambah Aset"}
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                {isEdit ? "Perbarui detail dan informasi aset" : "Tambahkan aset baru ke inventaris"}
-              </p>
-            </div>
+            <h2 id="asset-modal-title" className="text-lg font-semibold leading-tight text-gray-900">
+              {isEdit ? "Edit Data" : "Tambah Data"}
+            </h2>
           </div>
           <button
             onClick={requestClose}
             disabled={saving}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
             aria-label="Tutup modal"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-7 py-6">
+        {/* Modal Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-7 py-6 bg-slate-50/20">
           {errors.form && (
             <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
               {errors.form}
             </div>
           )}
 
-          <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
-            <Field label="Kategori" required error={errors.category_id || errors.category_name}>
-              <select
-                ref={categorySelectRef}
-                className={inputClass(errors.category_id || errors.category_name)}
-                value={form.category_id}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                disabled={saving}
-              >
-                <option value="">Pilih kategori terlebih dahulu</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name} ({c.code})
-                  </option>
-                ))}
-              </select>
-            </Field>
+          {/* Inner Card Container */}
+          <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm">
+            {/* Card Section Header */}
+            <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
+              <Package className="w-5 h-5 text-emerald-600" />
+              <span className="font-semibold text-slate-800 text-sm">
+                {isEdit ? `Edit Detail Aset (${editAsset?.asset_code})` : "Tambah Aset Baru"}
+              </span>
+            </div>
 
-            <Field
-              label="Kode Aset"
-              required
-              error={errors.asset_code}
-              hint="Kode aset dibuat otomatis berdasarkan kategori yang dipilih."
-            >
-              <div className="relative">
+            <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+              <Field label="Kategori" required error={errors.category_id || errors.category_name}>
+                <select
+                  ref={categorySelectRef}
+                  className={inputClass(errors.category_id || errors.category_name)}
+                  value={form.category_id}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  disabled={saving}
+                >
+                  <option value="">Pilih kategori terlebih dahulu</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field
+                label="Kode Aset"
+                required
+                error={errors.asset_code}
+                hint="Kode aset dibuat otomatis berdasarkan kategori yang dipilih."
+              >
+                <div className="relative">
+                  <input
+                    className={`${inputClass(errors.asset_code, true)} pr-10`}
+                    value={
+                      generatingCode
+                        ? "Membuat kode aset..."
+                        : form.asset_code || "Pilih kategori terlebih dahulu"
+                    }
+                    readOnly
+                    disabled
+                  />
+                  {generatingCode && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-blue-500" />
+                  )}
+                </div>
+              </Field>
+
+              <Field label="Nama Aset" required error={errors.asset_name}>
                 <input
-                  className={`${inputClass(errors.asset_code, true)} pr-10`}
-                  value={
-                    generatingCode
-                      ? "Membuat kode aset..."
-                      : form.asset_code || "Pilih kategori terlebih dahulu"
-                  }
-                  readOnly
-                  disabled
-                />
-                {generatingCode && (
-                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-blue-500" />
-                )}
-              </div>
-            </Field>
-
-            <Field label="Nama Aset" required error={errors.asset_name}>
-              <input
-                className={inputClass(errors.asset_name)}
-                placeholder="Contoh: Laptop Dell Latitude 5420"
-                value={form.asset_name}
-                onChange={(e) => set("asset_name", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Nama Pengguna" error={errors.user_name}>
-              <input
-                className={inputClass(errors.user_name)}
-                placeholder="Nama user pemegang aset (opsional)"
-                value={form.user_name}
-                onChange={(e) => set("user_name", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Brand" error={errors.brand}>
-              <input
-                className={inputClass(errors.brand)}
-                placeholder="Contoh: Dell, HP, Cisco"
-                value={form.brand}
-                onChange={(e) => set("brand", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Model" error={errors.model}>
-              <input
-                className={inputClass(errors.model)}
-                placeholder="Contoh: Latitude 5420"
-                value={form.model}
-                onChange={(e) => set("model", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Serial Number" error={errors.serial_number}>
-              <input
-                className={inputClass(errors.serial_number)}
-                placeholder="Masukkan serial number aset"
-                value={form.serial_number}
-                onChange={(e) => set("serial_number", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Harga Beli (Rp)" error={errors.purchase_price}>
-              <input
-                className={inputClass(errors.purchase_price)}
-                type="number"
-                placeholder="Contoh: 15000000"
-                value={form.purchase_price}
-                onChange={(e) => set("purchase_price", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Tanggal Beli" error={errors.purchase_date}>
-              <input
-                className={inputClass(errors.purchase_date)}
-                type="date"
-                value={form.purchase_date}
-                onChange={(e) => set("purchase_date", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Garansi Sampai" error={errors.warranty_expired}>
-              <input
-                className={inputClass(errors.warranty_expired)}
-                type="date"
-                value={form.warranty_expired}
-                onChange={(e) => set("warranty_expired", e.target.value)}
-              />
-            </Field>
-
-            <Field label="Kondisi" required error={errors.condition_status}>
-              <select
-                className={inputClass(errors.condition_status)}
-                value={form.condition_status}
-                onChange={(e) => set("condition_status", e.target.value)}
-              >
-                <option value="good">Good</option>
-                <option value="damaged">Damaged</option>
-                <option value="under_maintenance">Maintenance</option>
-              </select>
-            </Field>
-
-            <Field label="Status" required error={errors.status}>
-              <select
-                className={inputClass(errors.status)}
-                value={form.status}
-                onChange={(e) => set("status", e.target.value)}
-              >
-                <option value="active">Aktif</option>
-                <option value="borrowed">Dipinjam</option>
-                <option value="disposed">Disposed</option>
-              </select>
-            </Field>
-
-            <div className="md:col-span-2">
-              <Field label="Catatan" error={errors.note}>
-                <textarea
-                  className={`${inputClass(errors.note)} min-h-[120px] resize-y py-3`}
-                  placeholder="Catatan tambahan tentang aset ini..."
-                  value={form.note}
-                  onChange={(e) => set("note", e.target.value)}
+                  className={inputClass(errors.asset_name)}
+                  placeholder="Contoh: Laptop Dell Latitude 5420"
+                  value={form.asset_name}
+                  onChange={(e) => set("asset_name", e.target.value)}
                 />
               </Field>
+
+              <Field label="Nama Pengguna" error={errors.user_name}>
+                <input
+                  className={inputClass(errors.user_name)}
+                  placeholder="Nama user pemegang aset (opsional)"
+                  value={form.user_name}
+                  onChange={(e) => set("user_name", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Brand" error={errors.brand}>
+                <input
+                  className={inputClass(errors.brand)}
+                  placeholder="Contoh: Dell, HP, Cisco"
+                  value={form.brand}
+                  onChange={(e) => set("brand", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Model" error={errors.model}>
+                <input
+                  className={inputClass(errors.model)}
+                  placeholder="Contoh: Latitude 5420"
+                  value={form.model}
+                  onChange={(e) => set("model", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Serial Number" error={errors.serial_number}>
+                <input
+                  className={inputClass(errors.serial_number)}
+                  placeholder="Masukkan serial number aset"
+                  value={form.serial_number}
+                  onChange={(e) => set("serial_number", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Harga Beli (Rp)" error={errors.purchase_price}>
+                <input
+                  className={inputClass(errors.purchase_price)}
+                  type="number"
+                  placeholder="Contoh: 15000000"
+                  value={form.purchase_price}
+                  onChange={(e) => set("purchase_price", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Tanggal Beli" error={errors.purchase_date}>
+                <input
+                  className={inputClass(errors.purchase_date)}
+                  type="date"
+                  value={form.purchase_date}
+                  onChange={(e) => set("purchase_date", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Garansi Sampai" error={errors.warranty_expired}>
+                <input
+                  className={inputClass(errors.warranty_expired)}
+                  type="date"
+                  value={form.warranty_expired}
+                  onChange={(e) => set("warranty_expired", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Kondisi" required error={errors.condition_status}>
+                <select
+                  className={inputClass(errors.condition_status)}
+                  value={form.condition_status}
+                  onChange={(e) => set("condition_status", e.target.value)}
+                >
+                  <option value="good">Good</option>
+                  <option value="damaged">Damaged</option>
+                  <option value="under_maintenance">Maintenance</option>
+                </select>
+              </Field>
+
+              <Field label="Status" required error={errors.status}>
+                <select
+                  className={inputClass(errors.status)}
+                  value={form.status}
+                  onChange={(e) => set("status", e.target.value)}
+                >
+                  <option value="active">Aktif</option>
+                  <option value="borrowed">Dipinjam</option>
+                  <option value="disposed">Disposed</option>
+                </select>
+              </Field>
+
+              <div className="md:col-span-2">
+                <Field label="Catatan" error={errors.note}>
+                  <textarea
+                    className={`${inputClass(errors.note)} min-h-[100px] resize-y py-3`}
+                    placeholder="Catatan tambahan tentang aset ini..."
+                    value={form.note}
+                    onChange={(e) => set("note", e.target.value)}
+                  />
+                </Field>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="sticky bottom-0 flex justify-end gap-3 border-t border-[#eef2f7] bg-white px-7 py-5">
+        {/* Modal Footer */}
+        <div className="sticky bottom-0 flex justify-end gap-3 border-t border-gray-100 bg-white px-7 py-4 shrink-0">
           <button
             onClick={requestClose}
             disabled={saving}
-            className="h-11 rounded-[10px] bg-[#f8fafc] px-5 text-sm font-medium text-gray-700 transition hover:bg-[#e2e8f0] disabled:opacity-50"
+            className="h-10 px-6 rounded-full bg-red-500 hover:bg-red-650 text-white text-sm font-semibold transition disabled:opacity-50 shadow-sm"
           >
             Batal
           </button>
           <button
             onClick={submitAsset}
             disabled={saving || generatingCode || !form.category_id || !form.asset_code}
-            className="flex h-11 items-center gap-2 rounded-[10px] bg-[#2563eb] px-5 text-sm font-medium text-white shadow-sm transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 items-center gap-2 rounded-full bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            {isEdit ? "Simpan Perubahan" : "Simpan Aset"}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Simpan
           </button>
         </div>
       </div>

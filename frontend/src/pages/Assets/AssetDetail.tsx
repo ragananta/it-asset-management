@@ -4,7 +4,8 @@ import api from "../../api/axios";
 import {
   ArrowLeft, Package, Tag, User, Wrench,
   Calendar, DollarSign, Hash, Plus,
-  Pencil, Trash2, X, Check,
+  Pencil, Trash2, X, Check, Save,
+  QrCode, Printer, Download,
 } from "lucide-react";
 
 interface Category { id: number; name: string; }
@@ -71,7 +72,7 @@ export default function AssetDetail() {
   const [propModalOpen, setPropModalOpen] = useState(false);
   const [propModalClosing, setPropModalClosing] = useState(false);
   const [propEditTarget, setPropEditTarget] = useState<Property | null>(null);
-  const [propForm, setPropForm] = useState<PropertyForm>(propForm => propForm || emptyPropForm);
+  const [propForm, setPropForm] = useState<PropertyForm>(emptyPropForm);
   const [propErrors, setPropErrors] = useState<Record<string, string>>({});
   const propNameInputRef = useRef<HTMLInputElement>(null);
 
@@ -217,6 +218,88 @@ export default function AssetDetail() {
       });
   };
 
+  // ── QR Code actions ───────────────────────────────────────────────────────
+  const handlePrintQR = () => {
+    if (!asset) return;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print QR Code - ${asset.asset_code}</title>
+            <style>
+              body {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              }
+              .container {
+                text-align: center;
+                border: 2px solid #f1f5f9;
+                padding: 32px;
+                border-radius: 20px;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+              }
+              img {
+                width: 250px;
+                height: 250px;
+                margin-bottom: 20px;
+              }
+              h1 {
+                font-size: 20px;
+                font-weight: 700;
+                color: #0f172a;
+                margin: 0 0 6px 0;
+              }
+              p {
+                font-size: 13px;
+                font-weight: 600;
+                font-family: monospace;
+                color: #64748b;
+                margin: 0;
+                letter-spacing: 0.05em;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <img src="${qrUrl}" onload="window.print();window.close();" />
+              <h1>${asset.asset_name}</h1>
+              <p>${asset.asset_code}</p>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  const handleDownloadQR = async () => {
+    if (!asset) return;
+    try {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `qrcode-${asset.asset_code}.png`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Gagal mendownload QR Code:", err);
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+      window.open(qrUrl, "_blank");
+    }
+  };
+
   // ── Format helpers ────────────────────────────────────────────────────────
   const formatDate = (val?: string) => {
     if (!val) return "-";
@@ -285,35 +368,78 @@ export default function AssetDetail() {
         </div>
       </div>
 
-      {/* INFO UTAMA */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-          <Package className="w-4 h-4 text-blue-500" />
-          Informasi Aset
-        </h2>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-          <InfoRow icon={<Tag />} label="Kategori" value={asset.category?.name} />
-          <InfoRow icon={<User />} label="Pengguna" value={asset.assigned_user?.name} />
-          <InfoRow
-            icon={<Wrench />}
-            label="Brand / Model"
-            value={[asset.brand, asset.model].filter(Boolean).join(" · ") || "-"}
-          />
-          <InfoRow icon={<Hash />} label="Serial Number" value={asset.serial_number} mono />
-          <InfoRow icon={<DollarSign />} label="Harga Beli" value={formatCurrency(asset.purchase_price)} />
-          <InfoRow icon={<Calendar />} label="Tanggal Beli" value={formatDate(asset.purchase_date)} />
-          <InfoRow icon={<Calendar />} label="Garansi Sampai" value={formatDate(asset.warranty_expired)} />
-        </div>
-        {asset.note && (
-          <div className="mt-5 pt-5 border-t border-gray-100">
-            <p className="text-xs text-gray-400 mb-1">Catatan</p>
-            <p className="text-sm text-gray-600">{asset.note}</p>
+      {/* GRID LAYOUT FOR INFO UTAMA & QR CODE */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        {/* INFO UTAMA */}
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <Package className="w-4 h-4 text-blue-500" />
+              Informasi Aset
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+              <InfoRow icon={<Tag />} label="Kategori" value={asset.category?.name} />
+              <InfoRow icon={<User />} label="Pengguna" value={asset.assigned_user?.name} />
+              <InfoRow
+                icon={<Wrench />}
+                label="Brand / Model"
+                value={[asset.brand, asset.model].filter(Boolean).join(" · ") || "-"}
+              />
+              <InfoRow icon={<Hash />} label="Serial Number" value={asset.serial_number} mono />
+              <InfoRow icon={<DollarSign />} label="Harga Beli" value={formatCurrency(asset.purchase_price)} />
+              <InfoRow icon={<Calendar />} label="Tanggal Beli" value={formatDate(asset.purchase_date)} />
+              <InfoRow icon={<Calendar />} label="Garansi Sampai" value={formatDate(asset.warranty_expired)} />
+            </div>
           </div>
-        )}
+          {asset.note && (
+            <div className="mt-5 pt-5 border-t border-gray-100">
+              <p className="text-xs text-gray-400 mb-1">Catatan</p>
+              <p className="text-sm text-gray-600">{asset.note}</p>
+            </div>
+          )}
+        </div>
+
+        {/* QR CODE CARD */}
+        <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-between text-center min-h-[300px]">
+          <div className="w-full flex items-center gap-2 mb-3 justify-center sm:justify-start">
+            <QrCode className="w-4 h-4 text-blue-600" />
+            <h2 className="text-sm font-semibold text-gray-700">QR Code Aset</h2>
+          </div>
+
+          <div className="flex flex-col items-center justify-center flex-1 my-3 bg-slate-50 border border-slate-100 rounded-xl p-4 w-full">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.href)}`}
+              alt={`QR Code ${asset.asset_code}`}
+              className="w-40 h-40 object-contain drop-shadow-sm bg-white p-2.5 rounded-lg border border-slate-100"
+            />
+            <p className="text-xs font-mono font-bold text-gray-500 mt-3 tracking-wider bg-white border border-slate-100 px-3 py-1 rounded-full shadow-sm">
+              {asset.asset_code}
+            </p>
+          </div>
+
+          <div className="flex gap-2 w-full mt-2">
+            <button
+              onClick={handlePrintQR}
+              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-full transition duration-200"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Cetak QR
+            </button>
+            <button
+              onClick={handleDownloadQR}
+              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2.5 rounded-full shadow-sm transition duration-200"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Unduh QR
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* ASSET PROPERTIES */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-white rounded-xl border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
             <Hash className="w-4 h-4 text-purple-500" />
@@ -324,7 +450,7 @@ export default function AssetDetail() {
           </h2>
           <button
             onClick={openPropCreate}
-            className="flex items-center gap-1 text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-full transition"
+            className="flex items-center gap-1 text-xs text-white bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-full transition"
           >
             <Plus className="w-3 h-3" />
             Tambah
@@ -334,7 +460,7 @@ export default function AssetDetail() {
         {!asset.properties || asset.properties.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-300 text-sm">Belum ada property untuk aset ini</p>
-            <button onClick={openPropCreate} className="mt-2 text-blue-500 text-xs hover:underline">
+            <button onClick={openPropCreate} className="mt-2 text-blue-600 text-xs hover:underline">
               + Tambah property pertama
             </button>
           </div>
@@ -355,7 +481,7 @@ export default function AssetDetail() {
                 <div className="flex items-center gap-1 ml-3 shrink-0">
                   <button
                     onClick={() => openPropEdit(prop)}
-                    className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition"
+                    className="text-purple-600 text-xs bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-full flex items-center gap-1 transition"
                   >
                     <Pencil className="w-3 h-3" /> Edit
                   </button>
@@ -375,12 +501,7 @@ export default function AssetDetail() {
       {/* MODAL ADD/EDIT PROPERTY */}
       {propModalOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${propModalClosing ? "opacity-0" : "opacity-100"}`}
-          style={{
-            background: "rgba(15,23,42,0.35)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-          }}
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6 transition-opacity duration-200 ${propModalClosing ? "opacity-0" : "opacity-100"}`}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) requestClosePropModal();
           }}
@@ -396,94 +517,107 @@ export default function AssetDetail() {
             }
           `}</style>
           <div
-            className="bg-white w-full max-w-[500px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            className="bg-white w-full max-w-[500px] max-h-[90vh] rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col"
             style={{ animation: `${propModalClosing ? "propModalOut" : "propModalIn"} 200ms ease-out forwards` }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="prop-modal-title"
           >
-            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-7 py-5 border-b border-[#eef2f7] bg-white shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                  <Hash className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  {propEditTarget ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 </div>
-                <div>
-                  <h2 id="prop-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
-                    {propEditTarget ? "Edit Property" : "Tambah Property"}
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {propEditTarget ? "Perbarui detail property aset Anda" : "Tambahkan spesifikasi detail baru"}
-                  </p>
-                </div>
+                <h2 id="prop-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
+                  {propEditTarget ? "Edit Data" : "Tambah Data"}
+                </h2>
               </div>
               <button
                 type="button"
                 onClick={requestClosePropModal}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
                 aria-label="Tutup modal"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="px-7 py-6 overflow-y-auto max-h-[calc(90vh-181px)] space-y-5">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Nama Property <span className="text-red-500">*</span>
-                </label>
-                <input
-                  ref={propNameInputRef}
-                  type="text"
-                  placeholder="contoh: RAM, IP Address, OS"
-                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${propErrors.property_name ? "border-red-400" : "border-[#dbe2ea]"}`}
-                  value={propForm.property_name}
-                  onChange={(e) => setPropForm({ ...propForm, property_name: e.target.value })}
-                />
-                {propErrors.property_name && (
-                  <p className="text-red-500 text-xs mt-1">{propErrors.property_name}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Value <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="contoh: 16GB, 192.168.1.10, Windows 11"
-                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition ${propErrors.value ? "border-red-400" : "border-[#dbe2ea]"}`}
-                  value={propForm.value}
-                  onChange={(e) => setPropForm({ ...propForm, value: e.target.value })}
-                />
-                {propErrors.value && (
-                  <p className="text-red-500 text-xs mt-1">{propErrors.value}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Catatan <span className="text-gray-400 font-normal">(opsional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="contoh: IP statis kantor"
-                  className="w-full h-12 border border-[#dbe2ea] rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 transition"
-                  value={propForm.note}
-                  onChange={(e) => setPropForm({ ...propForm, note: e.target.value })}
-                />
+
+            {/* Modal Scrollable Content */}
+            <div className="px-7 py-6 overflow-y-auto flex-1 bg-slate-50/20">
+              {/* Inner Card Container */}
+              <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm">
+                {/* Card Section Header */}
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
+                  <Hash className="w-5 h-5 text-emerald-600" />
+                  <span className="font-semibold text-slate-800 text-sm">
+                    {propEditTarget ? "Edit Detail Spesifikasi" : "Tambah Detail Spesifikasi"}
+                  </span>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">
+                      Nama Property <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      ref={propNameInputRef}
+                      type="text"
+                      placeholder="contoh: RAM, IP Address, OS"
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${propErrors.property_name ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      value={propForm.property_name}
+                      onChange={(e) => setPropForm({ ...propForm, property_name: e.target.value })}
+                    />
+                    {propErrors.property_name && (
+                      <p className="text-red-500 text-xs mt-1">{propErrors.property_name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">
+                      Value <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="contoh: 16GB, 192.168.1.10, Windows 11"
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${propErrors.value ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      value={propForm.value}
+                      onChange={(e) => setPropForm({ ...propForm, value: e.target.value })}
+                    />
+                    {propErrors.value && (
+                      <p className="text-red-500 text-xs mt-1">{propErrors.value}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">
+                      Catatan <span className="text-gray-400 font-normal">(opsional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="contoh: IP statis kantor"
+                      className="w-full h-12 border border-[#dbe2ea] rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition"
+                      value={propForm.note}
+                      onChange={(e) => setPropForm({ ...propForm, note: e.target.value })}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end gap-3">
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white px-7 py-4 border-t border-[#eef2f7] flex justify-end gap-3 shrink-0">
               <button
                 onClick={requestClosePropModal}
-                className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
+                className="h-10 px-6 rounded-full bg-red-500 hover:bg-red-650 text-white text-sm font-semibold transition shadow-sm"
               >
                 Batal
               </button>
               <button
                 onClick={handlePropSave}
                 disabled={!propForm.property_name?.trim() || !propForm.value?.trim()}
-                className="h-11 px-5 text-sm font-medium text-white bg-[#2563eb] hover:bg-[#1d4ed8] rounded-[10px] transition flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Check className="w-4 h-4" />
-                {propEditTarget ? "Simpan Perubahan" : "Simpan"}
+                <Save className="w-4 h-4" />
+                Simpan
               </button>
             </div>
           </div>
@@ -493,13 +627,12 @@ export default function AssetDetail() {
       {/* MODAL DELETE PROPERTY */}
       {propDeleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6"
           onMouseDown={(e) => { if (e.target === e.currentTarget) setPropDeleteTarget(null); }}
         >
           <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
           <div
-            className="bg-white rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,.15)] w-full max-w-sm"
+            className="bg-white rounded-xl shadow-[0_25px_50px_rgba(0,0,0,0.15)] w-full max-w-sm"
             style={{ animation: "deleteModalIn 200ms ease-out forwards" }}
             role="dialog" aria-modal="true"
           >
@@ -517,13 +650,13 @@ export default function AssetDetail() {
             <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={() => setPropDeleteTarget(null)}
-                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition"
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition"
               >
                 Batal
               </button>
               <button
                 onClick={handlePropDelete}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition"
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-650 hover:bg-red-700 rounded-lg transition"
               >
                 Hapus
               </button>

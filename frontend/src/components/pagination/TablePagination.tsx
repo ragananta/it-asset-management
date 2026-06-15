@@ -90,7 +90,7 @@ export default function TablePagination({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => commitRowsPerPage(option)}
                     className={`w-full px-3 py-2 text-left text-sm transition ${
-                      option === rowsPerPage ? "bg-blue-50 font-semibold text-blue-600" : "text-gray-600 hover:bg-gray-50"
+                      option === rowsPerPage ? "bg-brand-50 font-semibold text-brand-600" : "text-gray-600 hover:bg-gray-50"
                     }`}
                   >
                     {option}

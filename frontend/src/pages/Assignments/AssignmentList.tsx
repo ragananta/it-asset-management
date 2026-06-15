@@ -3,7 +3,7 @@ import api from "../../api/axios";
 import { useAssets } from "../../context/AssetsContext";
 import { useKaryawan } from "../../context/KaryawanContext";
 import { usePolling } from "../../hooks/usePolling";
-import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download, Save } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
@@ -13,6 +13,8 @@ interface Assignment {
   user_name: string;
   phone?: string;
   assign_date: string;
+
+
   return_date: string | null;
   note?: string;
   deleted_at?: string | null;
@@ -217,7 +219,7 @@ export default function AssignmentList() {
       assign_date: form.assign_date, return_date: form.return_date || null, note: form.note || null,
     };
 
-    closeModal(); // ← tutup modal langsung, tidak tunggu request
+    closeModal(); 
 
     if (editTarget) {
       const res = await api.put(`/asset-assignments/${editTarget.id}`, payload);
@@ -229,7 +231,6 @@ export default function AssignmentList() {
     }
     refetchAssets();
   } catch (err: any) {
-    // Kalau error, buka modal lagi dengan error
     setModalOpen(true);
     if (err?.response?.data?.errors) {
       const apiErrors: Record<string, string> = {};
@@ -278,7 +279,7 @@ export default function AssignmentList() {
               onClick={() => { setFilterStatus(opt.value); setCurrentPage(1); }}
               className={`relative px-4 py-1.5 rounded-full text-xs font-medium transition border ${
                 filterStatus === opt.value
-                  ? (opt.activeClass || "bg-blue-600 text-white border-blue-600")
+                  ? (opt.activeClass || "bg-brand-600 text-white border-brand-600")
                   : "bg-transparent text-gray-500 border-transparent hover:text-gray-700"
               }`}
             >
@@ -297,12 +298,12 @@ export default function AssignmentList() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               placeholder="Cari peminjaman..."
-              className="w-full pl-9 pr-9 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 shadow-sm"
+              className="w-full h-10 pl-9 pr-9 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
               value={searchInput}
               onChange={(e) => handleSearchInput(e.target.value)}
             />
             {searchInput && (
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-650"
                 onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}>
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -311,14 +312,14 @@ export default function AssignmentList() {
 
           <button
             onClick={handleExport} disabled={exporting}
-            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50 whitespace-nowrap"
+            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50 whitespace-nowrap"
           >
             <Download className="w-4 h-4" />
             {exporting ? "..." : "Export"}
           </button>
 
           <button onClick={openCreate}
-            className="bg-blue-600 hover:bg-blue-700 transition text-white px-5 py-2.5 rounded-full text-sm font-medium shadow flex items-center gap-2 whitespace-nowrap">
+            className="bg-blue-600 hover:bg-blue-700 transition text-white h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 whitespace-nowrap">
             <Plus className="w-4 h-4" /> Tambah
           </button>
         </div>
@@ -335,7 +336,7 @@ export default function AssignmentList() {
       />
 
         {/* TABLE */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
           <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -398,7 +399,7 @@ export default function AssignmentList() {
                     <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.assign_date)}</td>
                     <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.return_date)}</td>
                     <td className="px-3 py-4 text-center align-middle">
-                      <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${
+                      <span className={`inline-flex items-center justify-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap w-28 ${
                         isActive(item) ? "text-blue-700 bg-blue-50" : "text-gray-500 bg-gray-100"
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${isActive(item) ? "bg-blue-500" : "bg-gray-400"}`} />
@@ -410,10 +411,22 @@ export default function AssignmentList() {
                     </td>
                     <td className="px-3 py-4 align-middle">
                       <div className="flex items-center justify-center gap-1.5 min-w-0">
-                        <button onClick={() => openEdit(item)}
-                          className="text-yellow-600 text-xs bg-yellow-50 hover:bg-yellow-100 px-2 py-1 rounded-full flex items-center gap-1 transition whitespace-nowrap">
-                          <Pencil className="w-3 h-3" /> Edit
-                        </button>
+                        {isActive(item) ? (
+                          <button onClick={() => openEdit(item)}
+                            className="text-purple-600 text-xs bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded-full flex items-center gap-1 transition whitespace-nowrap"
+                          >
+                            <Pencil className="w-3 h-3" /> Edit
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="text-purple-600 text-xs bg-purple-50 px-2 py-1 rounded-full flex items-center gap-1 whitespace-nowrap invisible pointer-events-none select-none"
+                            tabIndex={-1}
+                            aria-hidden="true"
+                          >
+                            <Pencil className="w-3 h-3" /> Edit
+                          </button>
+                        )}
                         <button onClick={() => setDeleteTarget(item)}
                           className="text-red-500 text-xs bg-red-50 hover:bg-red-100 px-2 py-1 rounded-full flex items-center gap-1 transition whitespace-nowrap">
                           <Trash2 className="w-3 h-3" /> Hapus
@@ -430,12 +443,7 @@ export default function AssignmentList() {
       {/* MODAL CREATE/EDIT */}
       {modalOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
-          style={{
-            background: "rgba(15,23,42,0.35)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-          }}
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm px-4 py-6 transition-opacity duration-200 ${modalClosing ? "opacity-0" : "opacity-100"}`}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) requestCloseModal();
           }}
@@ -451,131 +459,143 @@ export default function AssignmentList() {
             }
           `}</style>
           <div
-            className="bg-white w-full max-w-[760px] max-h-[90vh] rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,.15)] overflow-hidden"
+            className="bg-white w-full max-w-[760px] max-h-[90vh] rounded-2xl shadow-xl overflow-hidden flex flex-col"
             style={{ animation: `${modalClosing ? "assignmentModalOut" : "assignmentModalIn"} 200ms ease-out forwards` }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="assignment-modal-title"
           >
-            <div className="flex items-center justify-between px-7 py-6 border-b border-[#eef2f7] bg-white">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-7 py-5 border-b border-gray-100 bg-white shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <UserCheck className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  {editTarget ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 </div>
-                <div>
-                  <h2 id="assignment-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
-                    {editTarget ? "Edit Peminjaman" : "Tambah Peminjaman"}
-                  </h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {editTarget ? "Perbarui detail peminjaman aset" : "Catat peminjaman aset baru"}
-                  </p>
-                </div>
+                <h2 id="assignment-modal-title" className="font-semibold text-lg text-gray-900 leading-tight">
+                  {editTarget ? "Edit Data" : "Tambah Data"}
+                </h2>
               </div>
               <button
                 type="button"
                 onClick={requestCloseModal}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
                 aria-label="Tutup modal"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="px-7 py-6 overflow-y-auto max-h-[calc(90vh-181px)]">
-              <div className="grid grid-cols-1 gap-5">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Aset <span className="text-red-500">*</span></label>
-                <select
-                  ref={assetSelectRef}
-                  className={`w-full h-12 border rounded-[10px] px-3 text-sm bg-white focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.asset_id ? "border-red-400" : "border-[#dbe2ea]"}`}
-                  value={form.asset_id}
-                  onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
-                >
-                  <option value="">-- Pilih Aset --</option>
-                  {assets.map((a) => {
-                    const isBorrowed = a.status === "borrowed";
-                    const isCurrentAsset = editTarget && String(editTarget.asset_id) === String(a.id);
-                    const disabled = isBorrowed && !isCurrentAsset;
-                    return (
-                      <option
-                        key={a.id}
-                        value={a.id}
-                        disabled={disabled}
-                        style={disabled ? { color: "#9ca3af", backgroundColor: "#f9fafb" } : {}}
-                      >
-                        {a.asset_code} — {a.asset_name}{disabled ? " (Sedang Dipinjam)" : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-                {errors.asset_id && <p className="text-red-500 text-xs mt-1">{errors.asset_id}</p>}
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Nama Peminjam <span className="text-red-500">*</span></label>
-                <div className="relative" ref={dropdownRef}>
-                  <input type="text"
-                    className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.user_name ? "border-red-400" : "border-[#dbe2ea]"}`}
-                    placeholder={loadingKaryawan ? "Memuat data karyawan..." : "Ketik nama karyawan..."}
-                    value={karyawanInput} disabled={loadingKaryawan}
-                    onChange={(e) => { setKaryawanInput(e.target.value); setForm((f) => ({ ...f, user_name: e.target.value })); }}
-                    onFocus={() => karyawanDropdown.length > 0 && setShowDropdown(true)}
-                  />
-                  {showDropdown && karyawanDropdown.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-52 overflow-y-auto">
-                      {karyawanDropdown.map((k) => (
-                        <button key={k.username} type="button" onClick={() => selectKaryawan(k)}
-                          className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition border-b border-gray-50 last:border-0">
-                          <p className="text-sm font-medium text-gray-800">{k.name}</p>
-                          <p className="text-xs text-gray-400">{k.departemen} · {k.pos}</p>
-                        </button>
-                      ))}
+            {/* Modal Scrollable Content */}
+            <div className="px-7 py-6 overflow-y-auto flex-1 bg-slate-50/20">
+              {/* Inner Card Container */}
+              <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm">
+                {/* Card Section Header */}
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
+                  <UserCheck className="w-5 h-5 text-emerald-600" />
+                  <span className="font-semibold text-slate-800 text-sm">
+                    {editTarget ? "Edit Detail Peminjaman" : "Tambah Peminjaman Aset"}
+                  </span>
+                </div>
+
+                {/* Form fields in responsive grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {/* Field: Aset */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Aset <span className="text-red-500">*</span></label>
+                    <select
+                      ref={assetSelectRef}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.asset_id ? "border-red-400" : "border-gray-200"}`}
+                      value={form.asset_id}
+                      onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
+                    >
+                      <option value="">-- Pilih Aset --</option>
+                      {assets.map((a) => {
+                        const isBorrowed = a.status === "borrowed";
+                        const isCurrentAsset = editTarget && String(editTarget.asset_id) === String(a.id);
+                        const disabled = isBorrowed && !isCurrentAsset;
+                        return (
+                          <option
+                            key={a.id}
+                            value={a.id}
+                            disabled={disabled}
+                            style={disabled ? { color: "#9ca3af", backgroundColor: "#f9fafb" } : {}}
+                          >
+                            {a.asset_code} — {a.asset_name}{disabled ? " (Sedang Dipinjam)" : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {errors.asset_id && <p className="text-red-500 text-xs mt-1">{errors.asset_id}</p>}
+                  </div>
+
+                  {/* Field: Nama Peminjam */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nama Peminjam <span className="text-red-500">*</span></label>
+                    <div className="relative" ref={dropdownRef}>
+                      <input type="text"
+                        className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.user_name ? "border-red-400" : "border-gray-200"}`}
+                        placeholder={loadingKaryawan ? "Memuat data karyawan..." : "Ketik nama karyawan..."}
+                        value={karyawanInput} disabled={loadingKaryawan}
+                        onChange={(e) => { setKaryawanInput(e.target.value); setForm((f) => ({ ...f, user_name: e.target.value })); }}
+                      />
                     </div>
-                  )}
-                </div>
-                {errors.user_name && <p className="text-red-500 text-xs mt-1">{errors.user_name}</p>}
-              </div>
+                    {errors.user_name && <p className="text-red-500 text-xs mt-1">{errors.user_name}</p>}
+                  </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">No. WhatsApp <span className="text-red-500">*</span></label>
-                <input type="tel"
-                  className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.phone ? "border-red-400" : "border-[#dbe2ea]"}`}
-                  placeholder="628123456789" value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
-                <p className="text-xs text-gray-400 mt-1">Format: 628xxx (tanpa + atau spasi)</p>
-              </div>
+                  {/* Field: No. WhatsApp */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">No. WhatsApp <span className="text-red-500">*</span></label>
+                    <input type="tel"
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.phone ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      placeholder="628123456789" value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                    {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
+                    <p className="text-xs text-gray-400 mt-1">Format: 628xxx (tanpa + atau spasi)</p>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Tgl Pinjam <span className="text-red-500">*</span></label>
-                  <input type="date"
-                    className={`w-full h-12 border rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 ${errors.assign_date ? "border-red-400" : "border-[#dbe2ea]"}`}
-                    value={form.assign_date} onChange={(e) => setForm({ ...form, assign_date: e.target.value })} />
-                  {errors.assign_date && <p className="text-red-500 text-xs mt-1">{errors.assign_date}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Tgl Kembali <span className="text-gray-400 font-normal">(opsional)</span></label>
-                  <input type="date"
-                    className="w-full h-12 border border-[#dbe2ea] rounded-[10px] px-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15"
-                    value={form.return_date} onChange={(e) => setForm({ ...form, return_date: e.target.value })} />
-                </div>
-              </div>
+                  {/* Field: Tgl Pinjam */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tgl Pinjam <span className="text-red-500">*</span></label>
+                    <input type="date"
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.assign_date ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      value={form.assign_date} onChange={(e) => setForm({ ...form, assign_date: e.target.value })} />
+                    {errors.assign_date && <p className="text-red-500 text-xs mt-1">{errors.assign_date}</p>}
+                  </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Catatan <span className="text-gray-400 font-normal">(opsional)</span></label>
-                <textarea className="w-full min-h-[120px] border border-[#dbe2ea] rounded-[10px] px-3 py-3 text-sm focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 resize-y"
-                  placeholder="Keterangan tambahan..." rows={3} value={form.note}
-                  onChange={(e) => setForm({ ...form, note: e.target.value })} />
-              </div>
+                  {/* Field: Tgl Kembali */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tgl Kembali <span className="text-gray-400 font-normal">(opsional)</span></label>
+                    <input type="date"
+                      className="w-full h-12 border border-[#dbe2ea] rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
+                      value={form.return_date} onChange={(e) => setForm({ ...form, return_date: e.target.value })} />
+                  </div>
+
+                  {/* Field: Catatan */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Catatan <span className="text-gray-400 font-normal">(opsional)</span></label>
+                    <textarea className="w-full min-h-[100px] border border-[#dbe2ea] rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 resize-y"
+                      placeholder="Keterangan tambahan..." rows={3} value={form.note}
+                      onChange={(e) => setForm({ ...form, note: e.target.value })} />
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-white px-7 py-5 border-t border-[#eef2f7] flex justify-end gap-3">
-              <button onClick={requestCloseModal} className="h-11 px-5 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
-              <button onClick={handleSave}
-              className="h-11 px-5 text-sm font-medium text-white bg-[#2563eb] hover:bg-[#1d4ed8] rounded-[10px] transition flex items-center gap-2 shadow-sm">
-              <Check className="w-4 h-4" />
-              Simpan
-            </button>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white px-7 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+              <button
+                onClick={requestCloseModal}
+                className="h-10 px-6 text-sm font-semibold text-white bg-red-500 hover:bg-red-650 rounded-full transition shadow-sm"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSave}
+                className="h-10 px-6 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-full transition flex items-center gap-2 shadow-sm"
+              >
+                <Save className="w-4 h-4" />
+                Simpan
+              </button>
             </div>
           </div>
         </div>
@@ -584,13 +604,12 @@ export default function AssignmentList() {
       {/* MODAL DELETE */}
       {deleteTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6"
           onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
         >
           <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
           <div
-            className="bg-white rounded-2xl shadow-[0_25px_50px_rgba(0,0,0,.15)] w-full max-w-sm"
+            className="bg-white rounded-xl shadow-[0_25px_50px_rgba(0,0,0,0.15)] w-full max-w-sm"
             style={{ animation: "deleteModalIn 200ms ease-out forwards" }}
             role="dialog" aria-modal="true"
           >
@@ -606,9 +625,9 @@ export default function AssignmentList() {
               </p>
             </div>
             <div className="px-6 pb-6 flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition">Batal</button>
               <button onClick={handleDelete} disabled={deleting}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition disabled:opacity-50">
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-650 hover:bg-red-700 rounded-lg transition disabled:opacity-50">
                 {deleting ? "Menghapus..." : "Hapus"}
               </button>
             </div>

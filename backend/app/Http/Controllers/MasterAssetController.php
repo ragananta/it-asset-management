@@ -36,6 +36,28 @@ class MasterAssetController extends Controller
     public function index(Request $request)
     {
         try {
+            // mode=options untuk dropdown di frontend
+            if ($request->get('mode') === 'options') {
+                $cacheKey = 'assets:options:' . md5($request->fullUrl());
+                $data = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($cacheKey, $request) {
+                    $keys = Cache::get('assets:option_keys', []);
+                    if (!in_array($cacheKey, $keys)) {
+                        $keys[] = $cacheKey;
+                        Cache::put('assets:option_keys', $keys, now()->addHours(24));
+                    }
+                    $query = MasterAsset::query()
+                        ->select(['id', 'asset_name', 'asset_code', 'status', 'deleted_at'])
+                        ->where('status', '!=', 'disposed');
+
+                    if ($request->filled('status')) {
+                        $query->where('status', $request->status);
+                    }
+
+                    return $query->orderBy('asset_name')->limit(500)->get();
+                });
+                return $this->successResponse($data, 'Opsi aset berhasil diambil');
+            }
+
             $cacheKey = 'assets:index:' . md5($request->fullUrl());
 
             $data = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($cacheKey, $request) {
@@ -59,6 +81,7 @@ class MasterAssetController extends Controller
                     'condition_status',
                     'status',
                     'created_at',
+                    'deleted_at',
                 ]);
 
                 if ($request->filled('search')) {
@@ -87,7 +110,15 @@ class MasterAssetController extends Controller
                     $query->where('location_id', $request->integer('location_id'));
                 }
 
-                $query->orderBy('created_at', 'desc');
+                // Sorting Database dinamis dengan whitelist untuk keamanan
+                $sortBy = $request->get('sort_by', 'created_at');
+                $sortOrder = strtolower($request->get('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+                $allowedSorts = ['asset_code', 'asset_name', 'brand', 'model', 'serial_number', 'condition_status', 'status', 'created_at', 'updated_at'];
+                if (in_array($sortBy, $allowedSorts)) {
+                    $query->orderBy($sortBy, $sortOrder);
+                } else {
+                    $query->orderBy('created_at', 'desc');
+                }
 
                 $perPage = min($request->integer('per_page', 10), 100);
 
@@ -467,6 +498,13 @@ class MasterAssetController extends Controller
             Cache::forget($key);
         }
         Cache::forget('assets:cache_keys');
+
+        $optKeys = Cache::get('assets:option_keys', []);
+        foreach ($optKeys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('assets:option_keys');
+
         Cache::forget('dashboard:index');
     }
 

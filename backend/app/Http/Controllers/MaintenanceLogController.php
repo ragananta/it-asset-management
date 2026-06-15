@@ -20,7 +20,9 @@ class MaintenanceLogController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = MaintenanceLog::with('asset:id,asset_name,asset_code')
+            $query = MaintenanceLog::with(['asset' => function ($q) {
+                $q->withTrashed()->select(['id', 'asset_name', 'asset_code', 'deleted_at']);
+            }])
                 ->select([
                     'id',
                     'asset_id',
@@ -30,10 +32,8 @@ class MaintenanceLogController extends Controller
                     'pic',
                     'status',
                     'created_at',
-                ])
-                ->orderByDesc('date')
-                ->orderByDesc('created_at')
-                ->orderByDesc('id');
+                    'deleted_at',
+                ]);
 
             if ($request->filled('asset_id')) {
                 $query->where('asset_id', $request->asset_id);
@@ -53,11 +53,25 @@ class MaintenanceLogController extends Controller
                             ->orWhere('asset_code', 'like', "%{$search}%")
                       );
                 });
-
             }
 
             if ($request->filled('date_from') && $request->filled('date_to')) {
                 $query->whereBetween('date', [$request->date_from, $request->date_to]);
+            }
+
+            // Sorting Database dinamis dengan whitelist untuk keamanan
+            $sortBy = $request->get('sort_by', 'date');
+            $sortOrder = strtolower($request->get('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+            $allowedSorts = ['date', 'cost', 'pic', 'status', 'created_at', 'updated_at'];
+            if (in_array($sortBy, $allowedSorts)) {
+                $query->orderBy($sortBy, $sortOrder);
+                if ($sortBy !== 'id') {
+                    $query->orderBy('id', 'desc');
+                }
+            } else {
+                $query->orderByDesc('date')
+                      ->orderByDesc('created_at')
+                      ->orderByDesc('id');
             }
 
             // ── Total biaya untuk halaman ini ─────────────────────────────
