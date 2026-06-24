@@ -17,6 +17,10 @@ const AssignmentList = lazy(() => import("./pages/Assignments/AssignmentList"));
 const AssetsByEmployee = lazy(() => import("./pages/Reports/AssetsByEmployee"));
 const AuditLogList   = lazy(() => import("./pages/AuditLogs/AuditLogList"));
 const ActivityLogList = lazy(() => import("./pages/ActivityLogs/ActivityLogList"));
+const PlotingDeviceList = lazy(() => import("./pages/PlotingDevice/PlotingDeviceList"));
+const PlotingDeviceDetail = lazy(() => import("./pages/PlotingDevice/PlotingDeviceDetail"));
+const StorePackageList = lazy(() => import("./pages/StorePackage/StorePackageList"));
+const StorePackageDetail = lazy(() => import("./pages/StorePackage/StorePackageDetail"));
 
 // ── Loading fallback ─────────────────────────────────────────────────────────
 function PageLoader() {
@@ -61,10 +65,18 @@ export default function App() {
             <Route path="/maintenance" element={<MaintenanceList />} />
             <Route path="/assignments" element={<AssignmentList />} />
             <Route path="/employee-assets" element={<AssetsByEmployee />} />
+            <Route path="/ploting-devices" element={<PlotingDeviceList />} />
+            <Route path="/ploting-devices/:id" element={<PlotingDeviceDetail />} />
+            <Route path="/ploting_devices" element={<PlotingDeviceList />} />
+            <Route path="/ploting_devices/:id" element={<PlotingDeviceDetail />} />
+            <Route path="/store-packages" element={<StorePackageList />} />
+            <Route path="/store-packages/:storeCode" element={<StorePackageDetail />} />
             <Route path="/audit-logs"  element={<AuditLogList />} />
             <Route path="/logs"        element={<ActivityLogList />} />
           </Route>
 
+          {/* FALLBACK REDIRECT */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

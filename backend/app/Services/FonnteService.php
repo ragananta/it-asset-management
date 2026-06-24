@@ -12,12 +12,22 @@ class FonnteService
 
     public function __construct()
     {
-        $this->token      = config('fonnte.token');
-        $this->adminPhone = config('fonnte.admin_phone');
+        $this->token      = config('fonnte.token') ?? '';
+        $this->adminPhone = config('fonnte.admin_phone') ?? '';
     }
 
     public function send(string $phone, string $message): void
     {
+        if (empty($this->token)) {
+            Log::warning('Fonnte token is not configured. Skipping WhatsApp notification.');
+            return;
+        }
+
+        if (empty($phone)) {
+            Log::warning('Recipient phone number is empty. Skipping WhatsApp notification.');
+            return;
+        }
+
         try {
             $response = Http::withHeaders([
                 'Authorization' => $this->token,
@@ -49,13 +59,15 @@ class FonnteService
             "Harap jaga aset dengan baik. Terima kasih!"
         );
 
-        $this->send($this->adminPhone,
-            "📋 *Peminjaman Aset Baru*\n\n" .
-            "Peminjam: *{$borrowerName}*\n" .
-            "Aset: *{$assetName}*\n" .
-            "Tanggal Pinjam: {$assignDate}\n" .
-            "Tanggal Kembali: {$return}"
-        );
+        if (!empty($this->adminPhone)) {
+            $this->send($this->adminPhone,
+                "📋 *Peminjaman Aset Baru*\n\n" .
+                "Peminjam: *{$borrowerName}*\n" .
+                "Aset: *{$assetName}*\n" .
+                "Tanggal Pinjam: {$assignDate}\n" .
+                "Tanggal Kembali: {$return}"
+            );
+        }
     }
 
     public function notifyReturned(string $phone, string $borrowerName, string $assetName, string $returnDate): void
@@ -68,11 +80,13 @@ class FonnteService
             "Terima kasih sudah mengembalikan aset tepat waktu!"
         );
 
-        $this->send($this->adminPhone,
-            "✅ *Aset Dikembalikan*\n\n" .
-            "Peminjam: *{$borrowerName}*\n" .
-            "Aset: *{$assetName}*\n" .
-            "Dikembalikan pada: {$returnDate}"
-        );
+        if (!empty($this->adminPhone)) {
+            $this->send($this->adminPhone,
+                "✅ *Aset Dikembalikan*\n\n" .
+                "Peminjam: *{$borrowerName}*\n" .
+                "Aset: *{$assetName}*\n" .
+                "Dikembalikan pada: {$returnDate}"
+            );
+        }
     }
 }

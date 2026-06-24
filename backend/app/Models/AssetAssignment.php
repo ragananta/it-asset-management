@@ -28,6 +28,23 @@ class AssetAssignment extends Model
         'return_date' => 'date',
     ];
 
+    protected static function booted()
+    {
+        $clearCache = function () {
+            \Illuminate\Support\Facades\Cache::forget('dashboard:index');
+            
+            $keys = \Illuminate\Support\Facades\Cache::get('assignments:cache_keys', []);
+            foreach ($keys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('assignments:cache_keys');
+        };
+
+        static::saved($clearCache);
+        static::deleted($clearCache);
+        static::restored($clearCache);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

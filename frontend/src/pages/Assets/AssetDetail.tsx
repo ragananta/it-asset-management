@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../../api/axios";
+import { usePolling } from "@/hooks/usePolling";
 import {
   ArrowLeft, Package, Tag, User, Wrench,
   Calendar, DollarSign, Hash, Plus,
@@ -34,6 +35,12 @@ interface Asset {
   category?: Category;
   assigned_user?: AssignedUser;
   properties?: Property[];
+  assigned_to?: string | null;
+  assignment_source?: "direct" | "inherited" | null;
+  parent_package?: {
+    asset_code: string;
+    asset_name: string;
+  } | null;
 }
 
 interface PropertyForm {
@@ -64,9 +71,14 @@ const statusColor: Record<string, string> = {
 export default function AssetDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [asset, setAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState("");
+
+  const isSilentRef = useRef(false);
+  const isFetchingRef = useRef(false);
 
   // property modal
   const [propModalOpen, setPropModalOpen] = useState(false);
@@ -79,18 +91,38 @@ export default function AssetDetail() {
   // delete property
   const [propDeleteTarget, setPropDeleteTarget] = useState<Property | null>(null);
 
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    fetchDetail();
+  };
+
+  usePolling(triggerSilentRefresh, 60000, !propModalOpen && !propDeleteTarget);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchDetail = useCallback(async () => {
-    if (!id) return;
+    if (!id || isFetchingRef.current) return;
     try {
-      setLoading(true);
+      isFetchingRef.current = true;
+      if (!isSilentRef.current) {
+        setLoading(true);
+      }
       const res = await api.get(`/assets/${id}`);
       setAsset(res.data.data || res.data);
     } catch (err) {
       console.error(err);
-      setAsset(null);
+      if (!isSilentRef.current) {
+        setAsset(null);
+      }
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
+      isSilentRef.current = false;
     }
   }, [id]);
 
@@ -104,7 +136,6 @@ export default function AssetDetail() {
     setPropErrors({});
     setPropModalOpen(true);
   };
-
   const openPropEdit = (prop: Property) => {
     setPropModalClosing(false);
     setPropEditTarget(prop);
@@ -172,7 +203,10 @@ export default function AssetDetail() {
 
         closePropModal(); // tutup modal langsung
         api.put(`/asset-properties/${propEditTarget.id}`, payload)
-          .then(() => fetchDetail()) // refresh di background
+          .then(() => {
+            setToast("Spesifikasi berhasil diperbarui");
+            fetchDetail();
+          }) // refresh di background
           .catch((err) => {
             alert(err?.response?.data?.message || "Gagal menyimpan perubahan");
             fetchDetail();
@@ -181,7 +215,10 @@ export default function AssetDetail() {
       } else {
         closePropModal(); // tutup modal langsung
         api.post("/asset-properties", payload)
-          .then(() => fetchDetail()) // refresh di background
+          .then(() => {
+            setToast("Spesifikasi berhasil ditambahkan");
+            fetchDetail();
+          }) // refresh di background
           .catch((err) => {
             alert(err?.response?.data?.message || "Gagal menyimpan property");
             fetchDetail();
@@ -212,6 +249,9 @@ export default function AssetDetail() {
 
     // Request di background
     api.delete(`/asset-properties/${propDeleteTarget.id}`)
+      .then(() => {
+        setToast("Spesifikasi berhasil dihapus");
+      })
       .catch(() => {
         alert("Gagal menghapus property");
         fetchDetail(); // rollback
@@ -221,7 +261,7 @@ export default function AssetDetail() {
   // ── QR Code actions ───────────────────────────────────────────────────────
   const handlePrintQR = () => {
     if (!asset) return;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(asset.asset_code)}`;
     const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(`
@@ -282,7 +322,7 @@ export default function AssetDetail() {
   const handleDownloadQR = async () => {
     if (!asset) return;
     try {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(asset.asset_code)}`;
       const response = await fetch(qrUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -295,7 +335,7 @@ export default function AssetDetail() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Gagal mendownload QR Code:", err);
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(asset.asset_code)}`;
       window.open(qrUrl, "_blank");
     }
   };
@@ -329,7 +369,7 @@ export default function AssetDetail() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-3">Data aset tidak ditemukan</p>
-          <button onClick={() => navigate("/assets")} className="text-blue-600 text-sm hover:underline">
+          <button onClick={() => navigate(`/assets${location.search}`)} className="text-blue-600 text-sm hover:underline">
             ← Kembali ke daftar aset
           </button>
         </div>
@@ -339,12 +379,21 @@ export default function AssetDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 space-y-5">
+      {/* Toast Alert */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} className="text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* HEADER */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/assets")}
+            onClick={() => navigate(`/assets${location.search}`)}
             className="w-9 h-9 flex items-center justify-center rounded-full bg-white border border-gray-200 text-gray-500 hover:bg-gray-100 transition"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -380,7 +429,11 @@ export default function AssetDetail() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
               <InfoRow icon={<Tag />} label="Kategori" value={asset.category?.name} />
-              <InfoRow icon={<User />} label="Pengguna" value={asset.assigned_user?.name} />
+              <InfoRow
+                icon={<User />}
+                label="Pengguna"
+                value={asset.assigned_to || asset.assigned_user?.name || "-"}
+              />
               <InfoRow
                 icon={<Wrench />}
                 label="Brand / Model"
@@ -400,39 +453,63 @@ export default function AssetDetail() {
           )}
         </div>
 
-        {/* QR CODE CARD */}
-        <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-between text-center min-h-[300px]">
-          <div className="w-full flex items-center gap-2 mb-3 justify-center sm:justify-start">
-            <QrCode className="w-4 h-4 text-blue-600" />
-            <h2 className="text-sm font-semibold text-gray-700">QR Code Aset</h2>
-          </div>
+        {/* RIGHT COLUMN */}
+        <div className="lg:col-span-1 flex flex-col gap-5">
+          {/* CONTAINED IN CARD */}
+          {asset.parent_package && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Package className="w-4 h-4 text-blue-500" />
+                Bagian Dari Asset Package
+              </h2>
+              <div className="space-y-3 text-left">
+                <div>
+                  <p className="text-xs text-gray-400">Contained In</p>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {asset.parent_package.asset_name}
+                  </p>
+                  <p className="text-xs font-mono text-gray-500">
+                    ({asset.parent_package.asset_code})
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
-          <div className="flex flex-col items-center justify-center flex-1 my-3 bg-slate-50 border border-slate-100 rounded-xl p-4 w-full">
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.href)}`}
-              alt={`QR Code ${asset.asset_code}`}
-              className="w-40 h-40 object-contain drop-shadow-sm bg-white p-2.5 rounded-lg border border-slate-100"
-            />
-            <p className="text-xs font-mono font-bold text-gray-500 mt-3 tracking-wider bg-white border border-slate-100 px-3 py-1 rounded-full shadow-sm">
-              {asset.asset_code}
-            </p>
-          </div>
+          {/* QR CODE CARD */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center justify-between text-center min-h-[300px] flex-1">
+            <div className="w-full flex items-center gap-2 mb-3 justify-center sm:justify-start">
+              <QrCode className="w-4 h-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-gray-700">QR Code Aset</h2>
+            </div>
 
-          <div className="flex gap-2 w-full mt-2">
-            <button
-              onClick={handlePrintQR}
-              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-full transition duration-200"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              Cetak QR
-            </button>
-            <button
-              onClick={handleDownloadQR}
-              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2.5 rounded-full shadow-sm transition duration-200"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Unduh QR
-            </button>
+            <div className="flex flex-col items-center justify-center flex-1 my-3 bg-slate-50 border border-slate-100 rounded-xl p-4 w-full">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(asset.asset_code)}`}
+                alt={`QR Code ${asset.asset_code}`}
+                className="w-40 h-40 object-contain drop-shadow-sm bg-white p-2.5 rounded-lg border border-slate-100"
+              />
+              <p className="text-xs font-mono font-bold text-gray-500 mt-3 tracking-wider bg-white border border-slate-100 px-3 py-1 rounded-full shadow-sm">
+                {asset.asset_code}
+              </p>
+            </div>
+
+            <div className="flex gap-2 w-full mt-2">
+              <button
+                onClick={handlePrintQR}
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-full transition duration-200"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Cetak QR
+              </button>
+              <button
+                onClick={handleDownloadQR}
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2.5 rounded-full shadow-sm transition duration-200"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Unduh QR
+              </button>
+            </div>
           </div>
         </div>
 
@@ -557,7 +634,7 @@ export default function AssetDetail() {
 
                 <div className="space-y-5">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                       Nama Property <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -573,7 +650,7 @@ export default function AssetDetail() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                       Value <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -588,7 +665,7 @@ export default function AssetDetail() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                       Catatan <span className="text-gray-400 font-normal">(opsional)</span>
                     </label>
                     <input

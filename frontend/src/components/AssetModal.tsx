@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { Check, Loader2, Package, X, Plus, Pencil, Save } from "lucide-react";
+import { DatePicker } from "./ui/date-picker";
 
 const toDateInput = (val?: string | null): string => {
   if (!val) return "";
@@ -425,20 +426,18 @@ export default function AssetModal({
               </Field>
 
               <Field label="Tanggal Beli" error={errors.purchase_date}>
-                <input
-                  className={inputClass(errors.purchase_date)}
-                  type="date"
+                <DatePicker
                   value={form.purchase_date}
-                  onChange={(e) => set("purchase_date", e.target.value)}
+                  onChange={(val) => set("purchase_date", val)}
+                  error={!!errors.purchase_date}
                 />
               </Field>
 
               <Field label="Garansi Sampai" error={errors.warranty_expired}>
-                <input
-                  className={inputClass(errors.warranty_expired)}
-                  type="date"
+                <DatePicker
                   value={form.warranty_expired}
-                  onChange={(e) => set("warranty_expired", e.target.value)}
+                  onChange={(val) => set("warranty_expired", val)}
+                  error={!!errors.warranty_expired}
                 />
               </Field>
 

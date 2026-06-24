@@ -1,0 +1,4230 @@
+{
+  "info": {
+    "_postman_id": "5ca02e89-fa2d-4af0-b72c-897a597342c9",
+    "name": "IT Asset Management API",
+    "description": "Collection lengkap untuk IT Asset Management API\n\n## Setup\n\n1. Import collection ini ke Postman\n    \n2. Import environment `IT Asset Management - Environment.json`\n    \n3. Jalankan endpoint **Login** terlebih dahulu\n    \n4. Token otomatis tersimpan ke variable `{{token}}`\n    \n\n## Base URL\n\n`http://it-asset-api.test/api`\n\n## Flow Testing\n\n1. Auth → Register / Login\n    \n2. Categories → CRUD\n    \n3. Assets → CRUD\n    \n4. Asset Properties → CRUD\n    \n5. Maintenance Logs → CRUD\n    \n6. Audit Logs → CRUD\n    \n7. Asset Assignments → CRUD\n    \n8. Logs → GET only",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "54400390",
+    "_collection_link": "https://go.postman.co/collection/54400390-5ca02e89-fa2d-4af0-b72c-897a597342c9?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    pm.collectionVariables.set('token', res.data.token);",
+                  "    pm.test('Register berhasil', () => pm.response.to.have.status(201));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Administrator\",\n  \"email\": \"admin@itasset.com\",\n  \"password\": \"password\",\n  \"password_confirmation\": \"password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Registrasi user baru. Token otomatis disimpan ke variabel `{{token}}`."
+          },
+          "response": [
+            {
+              "name": "Register - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Administrator\",\n  \"email\": \"admin@itasset.com\",\n  \"password\": \"password\",\n  \"password_confirmation\": \"password\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/auth/register",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "register"
+                  ]
+                },
+                "description": "Registrasi user baru. Token otomatis disimpan ke variabel `{{token}}`."
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Registrasi berhasil\",\n  \"data\": {\n    \"user\": {\n      \"id\": 1,\n      \"name\": \"Administrator\",\n      \"email\": \"admin@itasset.com\",\n      \"created_at\": \"2024-01-01T07:00:00.000000Z\",\n      \"updated_at\": \"2024-01-01T07:00:00.000000Z\"\n    },\n    \"token\": \"1|abc123def456ghi789xyz\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const res = pm.response.json();",
+                  "",
+                  "    pm.environment.set(\"token\", res.data.token);",
+                  "",
+                  "    pm.test(\"Login berhasil dan token tersimpan\", function () {",
+                  "        pm.expect(res.data.token).to.not.be.empty;",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "packages": {},
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@itasset.com\",\n  \"password\": \"password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login dan dapatkan Bearer Token. Token otomatis disimpan ke variabel `{{token}}`."
+          },
+          "response": [
+            {
+              "name": "Login - Wrong Credentials",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@itasset.com\",\n  \"password\": \"password\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/auth/login",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Login dan dapatkan Bearer Token. Token otomatis disimpan ke variabel `{{token}}`."
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Email atau password salah\"\n}"
+            },
+            {
+              "name": "Login - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@itasset.com\",\n  \"password\": \"password\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/auth/login",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Login dan dapatkan Bearer Token. Token otomatis disimpan ke variabel `{{token}}`."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Login berhasil\",\n  \"data\": {\n    \"user\": {\n      \"id\": 1,\n      \"name\": \"Administrator\",\n      \"email\": \"admin@itasset.com\"\n    },\n    \"token\": \"1|abc123def456ghi789xyz\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Logout dan hapus token aktif."
+          },
+          "response": [
+            {
+              "name": "Logout - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/auth/logout",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "description": "Logout dan hapus token aktif."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Logout berhasil\",\n  \"data\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "Me (Profile)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Ambil data user yang sedang login."
+          },
+          "response": [
+            {
+              "name": "Me - Success",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/auth/me",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "me"
+                  ]
+                },
+                "description": "Ambil data user yang sedang login."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data user berhasil diambil\",\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"Administrator\",\n    \"email\": \"admin@itasset.com\",\n    \"created_at\": \"2024-01-01T07:00:00.000000Z\",\n    \"updated_at\": \"2024-01-01T07:00:00.000000Z\"\n  }\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Endpoint autentikasi: register, login, logout, dan get data user aktif"
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Get All Categories",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/categories?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15",
+                  "description": "Jumlah data per halaman (gunakan 'all' untuk semua)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Cari berdasarkan nama atau kode",
+                  "disabled": true
+                },
+                {
+                  "key": "is_active",
+                  "value": "",
+                  "description": "Filter: true atau false",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Ambil semua kategori dengan pagination.\n\n**Query Params:**\n- `per_page` = 15 (default) atau `all`\n- `search` = keyword pencarian\n- `is_active` = true/false"
+          },
+          "response": [
+            {
+              "name": "Get All Categories - Success",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/categories?per_page=15",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories"
+                  ],
+                  "query": [
+                    {
+                      "key": "per_page",
+                      "value": "15",
+                      "description": "Jumlah data per halaman (gunakan 'all' untuk semua)"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": "Cari berdasarkan nama atau kode",
+                      "disabled": true
+                    },
+                    {
+                      "key": "is_active",
+                      "value": "",
+                      "description": "Filter: true atau false",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Ambil semua kategori dengan pagination.\n\n**Query Params:**\n- `per_page` = 15 (default) atau `all`\n- `search` = keyword pencarian\n- `is_active` = true/false"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data kategori berhasil diambil\",\n  \"data\": {\n    \"current_page\": 1,\n    \"data\": [\n      {\n        \"id\": 1,\n        \"name\": \"Laptop\",\n        \"code\": \"CAT-LPT\",\n        \"description\": \"Perangkat laptop dan notebook\",\n        \"is_active\": true,\n        \"assets_count\": 2,\n        \"created_at\": \"2024-01-01T07:00:00.000000Z\",\n        \"updated_at\": \"2024-01-01T07:00:00.000000Z\"\n      }\n    ],\n    \"per_page\": 15,\n    \"total\": 5\n  }\n}"
+            },
+            {
+              "name": "Get All Categories",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/categories?per_page=15",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories"
+                  ],
+                  "query": [
+                    {
+                      "key": "per_page",
+                      "value": "15",
+                      "description": "Jumlah data per halaman (gunakan 'all' untuk semua)"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": "Cari berdasarkan nama atau kode",
+                      "disabled": true
+                    },
+                    {
+                      "key": "is_active",
+                      "value": "",
+                      "description": "Filter: true atau false",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [
+                {
+                  "key": "Date",
+                  "value": "Thu, 04 Jun 2026 07:11:53 GMT"
+                },
+                {
+                  "key": "Server",
+                  "value": "Apache/2.4.54 (Win64) OpenSSL/1.1.1q mod_fcgid/2.3.10-dev"
+                },
+                {
+                  "key": "X-Powered-By",
+                  "value": "PHP/8.3.31"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-cache, private"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Authorization"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5, max=100"
+                },
+                {
+                  "key": "Connection",
+                  "value": "Keep-Alive"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"success\": true,\n    \"message\": \"Data kategori berhasil diambil\",\n    \"data\": {\n        \"current_page\": 1,\n        \"data\": [\n            {\n                \"id\": 1,\n                \"name\": \"Laptop\",\n                \"code\": \"CAT-LPT\",\n                \"description\": \"Perangkat laptop dan notebook\",\n                \"is_active\": true,\n                \"created_at\": \"2026-05-17T07:50:33.000000Z\",\n                \"updated_at\": \"2026-05-23T02:12:09.000000Z\",\n                \"assets_count\": 3\n            },\n            {\n                \"id\": 2,\n                \"name\": \"Printer\",\n                \"code\": \"CAT-PRN\",\n                \"description\": \"Printer dan perangkat cetak\",\n                \"is_active\": true,\n                \"created_at\": \"2026-05-17T07:50:33.000000Z\",\n                \"updated_at\": \"2026-05-17T07:50:33.000000Z\",\n                \"assets_count\": 1\n            },\n            {\n                \"id\": 3,\n                \"name\": \"Networking\",\n                \"code\": \"CAT-NET\",\n                \"description\": \"Perangkat jaringan (switch, router, AP)\",\n                \"is_active\": true,\n                \"created_at\": \"2026-05-17T07:50:33.000000Z\",\n                \"updated_at\": \"2026-05-17T07:50:33.000000Z\",\n                \"assets_count\": 0\n            },\n            {\n                \"id\": 4,\n                \"name\": \"Server\",\n                \"code\": \"CAT-SRV\",\n                \"description\": \"Server dan perangkat komputasi berat\",\n                \"is_active\": true,\n                \"created_at\": \"2026-05-17T07:50:33.000000Z\",\n                \"updated_at\": \"2026-05-17T07:50:33.000000Z\",\n                \"assets_count\": 0\n            },\n            {\n                \"id\": 8,\n                \"name\": \"Tas Tenant\",\n                \"code\": \"CAT-TAS\",\n                \"description\": \"Tas Tenant\",\n                \"is_active\": true,\n                \"created_at\": \"2026-05-20T13:46:53.000000Z\",\n                \"updated_at\": \"2026-05-20T13:47:21.000000Z\",\n                \"assets_count\": 1\n            },\n            {\n                \"id\": 9,\n                \"name\": \"Scanner\",\n                \"code\": \"CAT-SCR\",\n                \"description\": \"Scanner\",\n                \"is_active\": true,\n                \"created_at\": \"2026-05-20T20:23:23.000000Z\",\n                \"updated_at\": \"2026-05-21T09:50:59.000000Z\",\n                \"assets_count\": 1\n            },\n            {\n                \"id\": 10,\n                \"name\": \"Monitor\",\n                \"code\": \"CAT-MON\",\n                \"description\": \"Monitor\",\n                \"is_active\": true,\n                \"created_at\": \"2026-06-03T02:34:01.000000Z\",\n                \"updated_at\": \"2026-06-03T02:34:14.000000Z\",\n                \"assets_count\": 0\n            }\n        ],\n        \"first_page_url\": \"http://it-asset-api.test/api/categories?page=1\",\n        \"from\": 1,\n        \"last_page\": 1,\n        \"last_page_url\": \"http://it-asset-api.test/api/categories?page=1\",\n        \"links\": [\n            {\n                \"url\": null,\n                \"label\": \"&laquo; Previous\",\n                \"page\": null,\n                \"active\": false\n            },\n            {\n                \"url\": \"http://it-asset-api.test/api/categories?page=1\",\n                \"label\": \"1\",\n                \"page\": 1,\n                \"active\": true\n            },\n            {\n                \"url\": null,\n                \"label\": \"Next &raquo;\",\n                \"page\": null,\n                \"active\": false\n            }\n        ],\n        \"next_page_url\": null,\n        \"path\": \"http://it-asset-api.test/api/categories\",\n        \"per_page\": 15,\n        \"prev_page_url\": null,\n        \"to\": 7,\n        \"total\": 7\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Category By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/categories/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories",
+                "1"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Category By ID - Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/categories/1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories",
+                    "1"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data kategori berhasil diambil\",\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"Laptop\",\n    \"code\": \"CAT-LPT\",\n    \"description\": \"Perangkat laptop dan notebook\",\n    \"is_active\": true,\n    \"assets_count\": 2,\n    \"created_at\": \"2024-01-01T07:00:00.000000Z\",\n    \"updated_at\": \"2024-01-01T07:00:00.000000Z\"\n  }\n}"
+            },
+            {
+              "name": "Get Category By ID - Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/categories/1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories",
+                    "1"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Kategori tidak ditemukan\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"UPS / Power Supply\",\n  \"code\": \"CAT-UPS\",\n  \"description\": \"Perangkat UPS dan power supply\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Create Category - Success",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"UPS / Power Supply\",\n  \"code\": \"CAT-UPS\",\n  \"description\": \"Perangkat UPS dan power supply\",\n  \"is_active\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Kategori berhasil ditambahkan\",\n  \"data\": {\n    \"id\": 6,\n    \"name\": \"UPS / Power Supply\",\n    \"code\": \"CAT-UPS\",\n    \"description\": \"Perangkat UPS dan power supply\",\n    \"is_active\": true,\n    \"created_at\": \"2024-06-01T07:00:00.000000Z\",\n    \"updated_at\": \"2024-06-01T07:00:00.000000Z\"\n  }\n}"
+            },
+            {
+              "name": "Create Category - Duplicate Name Error",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"UPS / Power Supply\",\n  \"code\": \"CAT-UPS\",\n  \"description\": \"Perangkat UPS dan power supply\",\n  \"is_active\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories"
+                  ]
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Nama kategori sudah digunakan.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"UPS & Power Supply\",\n  \"code\": \"CAT-UPS\",\n  \"description\": \"Perangkat UPS, stabilizer, dan power supply\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/categories/6",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories",
+                "6"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Update Category - Success",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"UPS & Power Supply\",\n  \"code\": \"CAT-UPS\",\n  \"description\": \"Perangkat UPS, stabilizer, dan power supply\",\n  \"is_active\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/categories/6",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories",
+                    "6"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Kategori berhasil diperbarui\",\n  \"data\": {\n    \"id\": 6,\n    \"name\": \"UPS & Power Supply\",\n    \"code\": \"CAT-UPS\",\n    \"description\": \"Perangkat UPS, stabilizer, dan power supply\",\n    \"is_active\": true,\n    \"created_at\": \"2024-06-01T07:00:00.000000Z\",\n    \"updated_at\": \"2024-06-01T08:00:00.000000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/categories/6",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories",
+                "6"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Delete Category - Success",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/categories/6",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories",
+                    "6"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Kategori berhasil dihapus\",\n  \"data\": null\n}"
+            },
+            {
+              "name": "Delete Category - Has Assets",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/categories/6",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "categories",
+                    "6"
+                  ]
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Kategori tidak dapat dihapus karena masih memiliki aset\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Restore Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/categories/1/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories",
+                "1",
+                "restore"
+              ]
+            },
+            "description": "Memulihkan kategori yang di-soft-delete."
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD untuk master kategori aset"
+    },
+    {
+      "name": "Master Asset",
+      "item": [
+        {
+          "name": "Get All Assets",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/assets?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "category_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "condition_status",
+                  "value": "",
+                  "description": "good|damaged|under_maintenance|retired",
+                  "disabled": true
+                },
+                {
+                  "key": "location_id",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get All Assets - Success",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/assets?per_page=15",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "assets"
+                  ],
+                  "query": [
+                    {
+                      "key": "per_page",
+                      "value": "15"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "condition_status",
+                      "value": "",
+                      "description": "good|damaged|under_maintenance|retired",
+                      "disabled": true
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data aset berhasil diambil\",\n  \"data\": {\n    \"current_page\": 1,\n    \"data\": [\n      {\n        \"id\": 1,\n        \"asset_code\": \"AST-LPT-001\",\n        \"asset_name\": \"Laptop Dell Latitude 5420\",\n        \"category_id\": 1,\n        \"location_id\": 1,\n        \"assigned_user_id\": 2,\n        \"brand\": \"Dell\",\n        \"model\": \"Latitude 5420\",\n        \"serial_number\": \"SN-DELL-001-2024\",\n        \"vendor\": \"PT. Dell Indonesia\",\n        \"purchase_date\": \"2023-03-15\",\n        \"purchase_price\": \"15000000.00\",\n        \"warranty_expired\": \"2026-03-15\",\n        \"condition_status\": \"good\",\n        \"note\": \"Laptop untuk staff IT\",\n        \"created_at\": \"2024-01-01T07:00:00.000000Z\",\n        \"updated_at\": \"2024-01-01T07:00:00.000000Z\",\n        \"category\": { \"id\": 1, \"name\": \"Laptop\", \"code\": \"CAT-LPT\" },\n        \"location\": { \"id\": 1, \"name\": \"Kantor Pusat - Lantai 1\" },\n        \"assigned_user\": { \"id\": 2, \"name\": \"Budi Santoso\" }\n      }\n    ],\n    \"per_page\": 15,\n    \"total\": 4\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Asset By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/assets/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets",
+                "1"
+              ]
+            },
+            "description": "Ambil detail aset lengkap termasuk properties, maintenance logs, audit logs, dan assignments."
+          },
+          "response": [
+            {
+              "name": "Get Asset By ID - Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/assets/1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "assets",
+                    "1"
+                  ]
+                },
+                "description": "Ambil detail aset lengkap termasuk properties, maintenance logs, audit logs, dan assignments."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Detail aset berhasil diambil\",\n  \"data\": {\n    \"id\": 1,\n    \"asset_code\": \"AST-LPT-001\",\n    \"asset_name\": \"Laptop Dell Latitude 5420\",\n    \"brand\": \"Dell\",\n    \"condition_status\": \"good\",\n    \"category\": { \"id\": 1, \"name\": \"Laptop\" },\n    \"location\": { \"id\": 1, \"name\": \"Kantor Pusat - Lantai 1\" },\n    \"assigned_user\": { \"id\": 2, \"name\": \"Budi Santoso\" },\n    \"properties\": [\n      { \"id\": 1, \"property_name\": \"RAM\", \"value\": \"16 GB DDR4\" },\n      { \"id\": 2, \"property_name\": \"Processor\", \"value\": \"Intel Core i5-1145G7\" },\n      { \"id\": 3, \"property_name\": \"IP Address\", \"value\": \"192.168.1.101\" }\n    ],\n    \"maintenance_logs\": [\n      { \"id\": 1, \"date\": \"2024-01-15\", \"description\": \"Pembersihan debu internal\", \"cost\": \"150000.00\", \"pic\": \"Agus Teknisi\" }\n    ],\n    \"assignments\": [\n      { \"id\": 1, \"user_name\": \"Budi Santoso\", \"assign_date\": \"2023-03-16\", \"return_date\": null }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Asset",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_code\": \"AST-MON-001\",\n  \"asset_name\": \"Monitor LG 24MK430H\",\n  \"category_id\": 5,\n  \"location_id\": 1,\n  \"assigned_user_id\": null,\n  \"brand\": \"LG\",\n  \"model\": \"24MK430H\",\n  \"serial_number\": \"SN-LG-MON-005-2024\",\n  \"vendor\": \"PT. LG Electronics Indonesia\",\n  \"purchase_date\": \"2024-01-10\",\n  \"purchase_price\": 2800000,\n  \"warranty_expired\": \"2027-01-10\",\n  \"condition_status\": \"good\",\n  \"note\": \"Monitor 24 inch Full HD untuk workstation\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/assets",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Create Asset - Success",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"asset_code\": \"AST-MON-001\",\n  \"asset_name\": \"Monitor LG 24MK430H\",\n  \"category_id\": 5,\n  \"location_id\": 1,\n  \"assigned_user_id\": null,\n  \"brand\": \"LG\",\n  \"model\": \"24MK430H\",\n  \"serial_number\": \"SN-LG-MON-005-2024\",\n  \"vendor\": \"PT. LG Electronics Indonesia\",\n  \"purchase_date\": \"2024-01-10\",\n  \"purchase_price\": 2800000,\n  \"warranty_expired\": \"2027-01-10\",\n  \"condition_status\": \"good\",\n  \"note\": \"Monitor 24 inch Full HD untuk workstation\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/assets",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "assets"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Aset berhasil ditambahkan\",\n  \"data\": {\n    \"id\": 5,\n    \"asset_code\": \"AST-MON-001\",\n    \"asset_name\": \"Monitor LG 24MK430H\",\n    \"brand\": \"LG\",\n    \"condition_status\": \"good\",\n    \"purchase_price\": \"2800000.00\",\n    \"created_at\": \"2024-06-01T07:00:00.000000Z\",\n    \"category\": { \"id\": 5, \"name\": \"Monitor\" },\n    \"location\": { \"id\": 1, \"name\": \"Kantor Pusat - Lantai 1\" },\n    \"assigned_user\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Asset",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_code\": \"AST-MON-001\",\n  \"asset_name\": \"Monitor LG 24MK430H-B\",\n  \"category_id\": 5,\n  \"location_id\": 2,\n  \"assigned_user_id\": 3,\n  \"brand\": \"LG\",\n  \"model\": \"24MK430H-B\",\n  \"serial_number\": \"SN-LG-MON-005-2024\",\n  \"vendor\": \"PT. LG Electronics Indonesia\",\n  \"purchase_date\": \"2024-01-10\",\n  \"purchase_price\": 2800000,\n  \"warranty_expired\": \"2027-01-10\",\n  \"condition_status\": \"good\",\n  \"note\": \"Dipindah ke lantai 2 untuk Sari Dewi\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/assets/5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets",
+                "5"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Asset",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/assets/5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets",
+                "5"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Lookup Asset",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/assets/lookup/AST-TAS-010",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets",
+                "lookup",
+                "AST-TAS-010"
+              ]
+            },
+            "description": "Mencari data aset berdasarkan kodenya (asset_code) untuk mendapatkan jenis aset dan tautan pengalihan detail page di frontend."
+          },
+          "response": [
+            {
+              "name": "Success Response - Package",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/assets/lookup/AST-TAS-010",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "assets",
+                    "lookup",
+                    "AST-TAS-010"
+                  ]
+                },
+                "description": "Mencari data aset berdasarkan kodenya (asset_code) untuk mendapatkan jenis aset dan tautan pengalihan detail page di frontend."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Aset berhasil di-lookup\",\n  \"data\": {\n    \"id\": 5,\n    \"asset_code\": \"AST-TAS-001\",\n    \"asset_type\": \"package\",\n    \"redirect_url\": \"/ploting-devices/5\"\n  }\n}"
+            },
+            {
+              "name": "Success Response - Individual",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/assets/lookup/AST-TAS-010",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "assets",
+                    "lookup",
+                    "AST-TAS-010"
+                  ]
+                },
+                "description": "Mencari data aset berdasarkan kodenya (asset_code) untuk mendapatkan jenis aset dan tautan pengalihan detail page di frontend."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Aset berhasil di-lookup\",\n  \"data\": {\n    \"id\": 1,\n    \"asset_code\": \"AST-LPT-001\",\n    \"asset_type\": \"individual\",\n    \"redirect_url\": \"/assets/1\"\n  }\n}"
+            },
+            {
+              "name": "Not Found Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/assets/lookup/AST-TAS-010",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "assets",
+                    "lookup",
+                    "AST-TAS-010"
+                  ]
+                },
+                "description": "Mencari data aset berdasarkan kodenya (asset_code) untuk mendapatkan jenis aset dan tautan pengalihan detail page di frontend."
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Aset tidak ditemukan\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Export Assets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/assets/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets",
+                "export"
+              ]
+            },
+            "description": "Mengekspor data semua aset ke Excel."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Asset Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/assets/generate-code/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets",
+                "generate-code",
+                "1"
+              ]
+            },
+            "description": "Menghasilkan kode aset baru berdasarkan ID Kategori."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Asset Timeline",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/assets/1/timeline",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "assets",
+                "1",
+                "timeline"
+              ]
+            },
+            "description": "Mengambil riwayat/timeline dari suatu aset berdasarkan ID."
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD untuk master aset IT"
+    },
+    {
+      "name": "Asset Properties",
+      "item": [
+        {
+          "name": "Get All Asset Properties",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asset-properties?asset_id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-properties"
+              ],
+              "query": [
+                {
+                  "key": "asset_id",
+                  "value": "1",
+                  "description": "Filter berdasarkan ID aset"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Cari nama properti",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Asset Properties - Success",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/asset-properties?asset_id=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "asset-properties"
+                  ],
+                  "query": [
+                    {
+                      "key": "asset_id",
+                      "value": "1",
+                      "description": "Filter berdasarkan ID aset"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": "Cari nama properti",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data properti aset berhasil diambil\",\n  \"data\": {\n    \"current_page\": 1,\n    \"data\": [\n      { \"id\": 1, \"asset_id\": 1, \"property_name\": \"RAM\",        \"value\": \"16 GB DDR4\",          \"note\": \"2x8GB dual channel\" },\n      { \"id\": 2, \"asset_id\": 1, \"property_name\": \"Processor\",   \"value\": \"Intel Core i5-1145G7\",\"note\": null },\n      { \"id\": 3, \"asset_id\": 1, \"property_name\": \"Storage\",     \"value\": \"512 GB NVMe SSD\",     \"note\": null },\n      { \"id\": 4, \"asset_id\": 1, \"property_name\": \"IP Address\",  \"value\": \"192.168.1.101\",       \"note\": \"IP statis\" },\n      { \"id\": 5, \"asset_id\": 1, \"property_name\": \"MAC Address\", \"value\": \"A4:C3:F0:12:34:56\",   \"note\": \"WiFi adapter\" }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Asset Property By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asset-properties/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-properties",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Asset Property",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 1,\n  \"property_name\": \"OS Version\",\n  \"value\": \"Windows 11 Pro 23H2\",\n  \"note\": \"Lisensi OEM\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/asset-properties",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-properties"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Asset Property",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 1,\n  \"property_name\": \"OS Version\",\n  \"value\": \"Windows 11 Pro 24H2\",\n  \"note\": \"Update ke versi terbaru\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/asset-properties/11",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-properties",
+                "11"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Asset Property",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asset-properties/11",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-properties",
+                "11"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD untuk properti tambahan aset (IP, RAM, MAC Address, dll)"
+    },
+    {
+      "name": "Maintenance",
+      "item": [
+        {
+          "name": "Get All Maintenance Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/maintenance-logs?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "maintenance-logs"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15"
+                },
+                {
+                  "key": "asset_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "date_from",
+                  "value": "",
+                  "description": "Format: YYYY-MM-DD",
+                  "disabled": true
+                },
+                {
+                  "key": "date_to",
+                  "value": "",
+                  "description": "Format: YYYY-MM-DD",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Maintenance Log By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/maintenance-logs/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "maintenance-logs",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Maintenance Log",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 1,\n  \"date\": \"2024-06-15\",\n  \"description\": \"Penggantian baterai laptop yang sudah drop kapasitasnya menjadi 30%\",\n  \"cost\": 1200000,\n  \"pic\": \"Agus Teknisi\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/maintenance-logs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "maintenance-logs"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Create Maintenance Log - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"asset_id\": 1,\n  \"date\": \"2024-06-15\",\n  \"description\": \"Penggantian baterai laptop yang sudah drop kapasitasnya menjadi 30%\",\n  \"cost\": 1200000,\n  \"pic\": \"Agus Teknisi\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/maintenance-logs",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "maintenance-logs"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Maintenance log berhasil ditambahkan\",\n  \"data\": {\n    \"id\": 5,\n    \"asset_id\": 1,\n    \"date\": \"2024-06-15\",\n    \"description\": \"Penggantian baterai laptop yang sudah drop kapasitasnya menjadi 30%\",\n    \"cost\": \"1200000.00\",\n    \"pic\": \"Agus Teknisi\",\n    \"created_at\": \"2024-06-15T07:00:00.000000Z\",\n    \"asset\": {\n      \"id\": 1,\n      \"asset_code\": \"AST-LPT-001\",\n      \"asset_name\": \"Laptop Dell Latitude 5420\"\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Maintenance Log",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 1,\n  \"date\": \"2024-06-15\",\n  \"description\": \"Penggantian baterai laptop (original Dell 68WHr)\",\n  \"cost\": 1350000,\n  \"pic\": \"Agus Teknisi\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/maintenance-logs/5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "maintenance-logs",
+                "5"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Maintenance Log",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/maintenance-logs/5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "maintenance-logs",
+                "5"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Maintenance Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/maintenance-logs/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "maintenance-logs",
+                "export"
+              ]
+            },
+            "description": "Mengekspor log pemeliharaan aset ke Excel."
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD untuk log maintenance aset"
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "Get All Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/audit-logs?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15"
+                },
+                {
+                  "key": "asset_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "action",
+                  "value": "",
+                  "description": "repair|renew|update|replace",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Audit Log By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/audit-logs/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit-logs",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Audit Log",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 2,\n  \"action\": \"replace\",\n  \"description\": \"Penggantian toner printer HP LaserJet Pro M404 - HP 59A habis\",\n  \"pic\": \"Staff Umum\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/audit-logs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit-logs"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Create Audit Log - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"asset_id\": 2,\n  \"action\": \"replace\",\n  \"description\": \"Penggantian toner printer HP LaserJet Pro M404 - HP 59A habis\",\n  \"pic\": \"Staff Umum\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/audit-logs",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "audit-logs"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Audit log berhasil ditambahkan\",\n  \"data\": {\n    \"id\": 4,\n    \"asset_id\": 2,\n    \"action\": \"replace\",\n    \"description\": \"Penggantian toner printer HP LaserJet Pro M404 - HP 59A habis\",\n    \"pic\": \"Staff Umum\",\n    \"created_at\": \"2024-06-01T07:00:00.000000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Audit Log",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 2,\n  \"action\": \"replace\",\n  \"description\": \"Penggantian toner HP 59A dan drum unit printer\",\n  \"pic\": \"Bimo Teknisi\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/audit-logs/4",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit-logs",
+                "4"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Audit Log",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/audit-logs/4",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "audit-logs",
+                "4"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD untuk audit log aktivitas aset (repair, renew, update, replace)"
+    },
+    {
+      "name": "Asset Assignment",
+      "item": [
+        {
+          "name": "Get All Assignments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asset-assignments?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-assignments"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15"
+                },
+                {
+                  "key": "asset_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Cari nama user",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "true = belum dikembalikan",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get All Assignments - Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/asset-assignments?per_page=15",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "asset-assignments"
+                  ],
+                  "query": [
+                    {
+                      "key": "per_page",
+                      "value": "15"
+                    },
+                    {
+                      "key": "asset_id",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": "Cari nama user",
+                      "disabled": true
+                    },
+                    {
+                      "key": "active",
+                      "value": "true",
+                      "description": "true = belum dikembalikan",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data penugasan aset berhasil diambil\",\n  \"data\": {\n    \"data\": [\n      {\n        \"id\": 1,\n        \"asset_id\": 1,\n        \"user_name\": \"Budi Santoso\",\n        \"assign_date\": \"2023-03-16\",\n        \"return_date\": null,\n        \"note\": \"Penugasan permanen untuk staff IT\",\n        \"asset\": { \"id\": 1, \"asset_code\": \"AST-LPT-001\", \"asset_name\": \"Laptop Dell Latitude 5420\" }\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Assignment By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asset-assignments/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-assignments",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 5,\n  \"user_name\": \"Doni Marketing\",\n  \"assign_date\": \"2024-06-01\",\n  \"return_date\": null,\n  \"note\": \"Peminjaman monitor untuk kerja dari kantor cabang\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/asset-assignments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-assignments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Assignment (Return Asset)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_id\": 5,\n  \"user_name\": \"Doni Marketing\",\n  \"assign_date\": \"2024-06-01\",\n  \"return_date\": \"2024-07-01\",\n  \"note\": \"Aset dikembalikan dalam kondisi baik\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/asset-assignments/4",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-assignments",
+                "4"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Assignment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asset-assignments/4",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-assignments",
+                "4"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Assignments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/asset-assignments/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "asset-assignments",
+                "export"
+              ]
+            },
+            "description": "Mengekspor data peminjaman/penugasan aset ke Excel."
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD untuk penugasan atau peminjaman aset ke user"
+    },
+    {
+      "name": "Logs",
+      "item": [
+        {
+          "name": "Get All Logs",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/logs?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "logs"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15"
+                },
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "activity",
+                  "value": "",
+                  "description": "login|logout|create_data|update_data|delete_data",
+                  "disabled": true
+                },
+                {
+                  "key": "date_from",
+                  "value": "",
+                  "description": "YYYY-MM-DD",
+                  "disabled": true
+                },
+                {
+                  "key": "date_to",
+                  "value": "",
+                  "description": "YYYY-MM-DD",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get All Logs - Success",
+              "originalRequest": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/logs?per_page=15",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "logs"
+                  ],
+                  "query": [
+                    {
+                      "key": "per_page",
+                      "value": "15"
+                    },
+                    {
+                      "key": "user_id",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "activity",
+                      "value": "",
+                      "description": "login|logout|create_data|update_data|delete_data",
+                      "disabled": true
+                    },
+                    {
+                      "key": "date_from",
+                      "value": "",
+                      "description": "YYYY-MM-DD",
+                      "disabled": true
+                    },
+                    {
+                      "key": "date_to",
+                      "value": "",
+                      "description": "YYYY-MM-DD",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data log aktivitas berhasil diambil\",\n  \"data\": {\n    \"data\": [\n      {\n        \"id\": 1,\n        \"user_id\": 1,\n        \"activity\": \"login\",\n        \"description\": \"User berhasil login\",\n        \"ip_address\": \"127.0.0.1\",\n        \"user_agent\": \"PostmanRuntime/7.36.0\",\n        \"created_at\": \"2024-06-01T07:00:00.000000Z\",\n        \"user\": { \"id\": 1, \"name\": \"Administrator\", \"email\": \"admin@itasset.com\" }\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Log By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/logs/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "logs",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Riwayat aktivitas user di sistem (read-only)"
+    },
+    {
+      "name": "Asset Package",
+      "item": [
+        {
+          "name": "Get All Mapping",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ploting-devices?page=1&per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ploting-devices"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "15"
+                }
+              ]
+            },
+            "description": "Mengambil semua data pemetaan Tas dan perangkat di dalamnya dengan paginasi."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Detail Mapping",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ploting-devices/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ploting-devices",
+                "1"
+              ]
+            },
+            "description": "Mengambil detail lengkap pemetaan Tas dan perangkat di dalamnya berdasarkan ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Mapping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"container_asset_id\": 2,\n  \"asset_ids\": [1, 3]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ploting-devices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ploting-devices"
+              ]
+            },
+            "description": "Membuat pemetaan (mapping) antara Tas kontainer dan beberapa asset di dalamnya."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Mapping",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"container_asset_id\": 2,\n  \"asset_ids\": [1, 3, 4]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ploting-devices/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ploting-devices",
+                "1"
+              ]
+            },
+            "description": "Mengubah daftar perangkat di dalam Tas kontainer."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Mapping",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ploting-devices/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ploting-devices",
+                "1"
+              ]
+            },
+            "description": "Melepas semua perangkat di dalam Tas (hapus relasi mapping) tanpa menghapus asset fisik."
+          },
+          "response": []
+        },
+        {
+          "name": "Scan Asset Package (Scan Tas)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ploting-devices/scan/AST-TAS-010",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ploting-devices",
+                "scan",
+                "AST-TAS-010"
+              ]
+            },
+            "description": "Melakukan scan Asset Package menggunakan asset_code tanpa memerlukan ID database."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/ploting-devices/scan/AST-TAS-010",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "ploting-devices",
+                    "scan",
+                    "AST-TAS-010"
+                  ]
+                },
+                "description": "Melakukan scan Asset Package menggunakan asset_code tanpa memerlukan ID database."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"id_tas\": 14,\n  \"asset_code\": \"AST-TAS-010\",\n  \"nama_tas\": \"Tas Green Truck\",\n  \"nama_store\": \"Green Truck\",\n  \"status\": \"active\",\n  \"total_asset\": 3,\n  \"detail_asset\": [\n    {\n      \"asset_code\": \"AST-TAB-001\",\n      \"asset_name\": \"Tablet Samsung Galaxy Tab A9\",\n      \"category\": \"Tablet\",\n      \"condition\": \"good\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "Asset Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/ploting-devices/scan/AST-TAS-010",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "ploting-devices",
+                    "scan",
+                    "AST-TAS-010"
+                  ]
+                },
+                "description": "Melakukan scan Asset Package menggunakan asset_code tanpa memerlukan ID database."
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Asset Package tidak ditemukan.\"\n}"
+            },
+            {
+              "name": "Non-Package Asset",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/ploting-devices/scan/AST-TAS-010",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "ploting-devices",
+                    "scan",
+                    "AST-TAS-010"
+                  ]
+                },
+                "description": "Melakukan scan Asset Package menggunakan asset_code tanpa memerlukan ID database."
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Asset bukan Asset Package.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Ploting Device Timeline",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ploting-devices/1/timeline",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ploting-devices",
+                "1",
+                "timeline"
+              ]
+            },
+            "description": "Mengambil riwayat transaksi plotting device / paket tas berdasarkan ID plotting device."
+          },
+          "response": []
+        }
+      ],
+      "description": "Pemetaan relasi perangkat di dalam Tas kontainer (Ploting Device)"
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Assets by Employee",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports/assets-by-employee?page=1&per_page=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "assets-by-employee"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "department",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Mendapatkan laporan distribusi aset yang dipinjam per karyawan."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Assets by Employee",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports/assets-by-employee/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "assets-by-employee",
+                "export"
+              ]
+            },
+            "description": "Mengunduh file Excel laporan distribusi aset per karyawan."
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints untuk modul Laporan IT Asset Management."
+    },
+    {
+      "name": "SATS Integration",
+      "item": [
+        {
+          "name": "Get Bag Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/sats/bags/{{asset_code}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "sats",
+                "bags",
+                "{{asset_code}}"
+              ]
+            },
+            "description": "Digunakan oleh aplikasi SATS ketika QR Tas di-scan."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/integrations/sats/bags/{{asset_code}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "integrations",
+                    "sats",
+                    "bags",
+                    "{{asset_code}}"
+                  ]
+                },
+                "description": "Digunakan oleh aplikasi SATS ketika QR Tas di-scan."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Detail Tas berhasil diambil\",\n  \"data\": {\n    \"asset_code\": \"AST-TAS-001\",\n    \"asset_name\": \"Tas Angon Ingon\",\n    \"store_name\": \"Mock Store SATS\",\n    \"status\": \"available\",\n    \"total_assets\": 2,\n    \"borrowed_by\": null,\n    \"borrowed_at\": null,\n    \"contents\": [\n      {\n        \"asset_code\": \"AST-TAB-001\",\n        \"asset_name\": \"Tablet Samsung Galaxy Tab A9\",\n        \"category\": \"Tablet\",\n        \"condition_status\": \"good\",\n        \"status\": \"active\"\n      }\n    ],\n    \"assets\": [\n      {\n        \"asset_code\": \"AST-TAB-001\",\n        \"asset_name\": \"Tablet Samsung Galaxy Tab A9\",\n        \"category\": \"Tablet\",\n        \"condition\": \"Good\",\n        \"status\": \"Aktif\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Borrow Bag",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_code\": \"AST-TAS-001\",\n  \"performed_by\": \"Andi Saputra\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/integrations/sats/bags/borrow",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "sats",
+                "bags",
+                "borrow"
+              ]
+            },
+            "description": "Digunakan ketika karyawan mengambil Tas."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"asset_code\": \"AST-TAS-001\",\n  \"performed_by\": \"Andi Saputra\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/integrations/sats/bags/borrow",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "integrations",
+                    "sats",
+                    "bags",
+                    "borrow"
+                  ]
+                },
+                "description": "Digunakan ketika karyawan mengambil Tas."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Tas berhasil dipinjam\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Return Bag",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_code\": \"AST-TAS-001\",\n  \"performed_by\": \"Budi Santoso\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/integrations/sats/bags/return",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "sats",
+                "bags",
+                "return"
+              ]
+            },
+            "description": "Digunakan ketika Tas dikembalikan."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"asset_code\": \"AST-TAS-001\",\n  \"performed_by\": \"Budi Santoso\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/integrations/sats/bags/return",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "integrations",
+                    "sats",
+                    "bags",
+                    "return"
+                  ]
+                },
+                "description": "Digunakan ketika Tas dikembalikan."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Tas berhasil dikembalikan\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Report Maintenance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bag_asset_code\": \"AST-TAS-001\",\n  \"asset_code\": \"AST-PRN-001\",\n  \"description\": \"Printer tidak menyala\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/integrations/sats/report-maintenance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "sats",
+                "report-maintenance"
+              ]
+            },
+            "description": "Digunakan ketika device dalam Tas mengalami kerusakan."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bag_asset_code\": \"AST-TAS-001\",\n  \"asset_code\": \"AST-PRN-001\",\n  \"description\": \"Printer tidak menyala\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/integrations/sats/report-maintenance",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "integrations",
+                    "sats",
+                    "report-maintenance"
+                  ]
+                },
+                "description": "Digunakan ketika device dalam Tas mengalami kerusakan."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Laporan maintenance berhasil dibuat\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Bag Transaction History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/sats/bags/{{asset_code}}/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "sats",
+                "bags",
+                "{{asset_code}}",
+                "history"
+              ]
+            },
+            "description": "Mendapatkan riwayat peminjaman, pengembalian, dan laporan kerusakan dari Tas ini."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/integrations/sats/bags/{{asset_code}}/history",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "integrations",
+                    "sats",
+                    "bags",
+                    "{{asset_code}}",
+                    "history"
+                  ]
+                },
+                "description": "Mendapatkan riwayat peminjaman, pengembalian, dan laporan kerusakan dari Tas ini."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"History Tas berhasil diambil\",\n  \"data\": [\n    {\n      \"event_type\": \"BORROW\",\n      \"performed_by\": \"Andi Saputra\",\n      \"timestamp\": \"2026-06-16 08:00:00\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Endpoints khusus untuk integrasi dengan sistem SATS."
+    },
+    {
+      "name": "Store",
+      "item": [
+        {
+          "name": "Get Store Options",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/stores/options",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "stores",
+                "options"
+              ]
+            },
+            "description": "Mengambil semua daftar store/lokasi yang aktif dari POS untuk digunakan pada frontend."
+          },
+          "response": []
+        }
+      ],
+      "description": "Store location metadata integrated with POS API."
+    },
+    {
+      "name": "Karyawan",
+      "item": [
+        {
+          "name": "Get Karyawan List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/karyawan?search=&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "karyawan"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Mengambil data karyawan aktif dari API eksternal dengan parameter search (opsional) dan limit (opsional, batas 1-200)."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/karyawan?search=&limit=20",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "karyawan"
+                  ],
+                  "query": [
+                    {
+                      "key": "search",
+                      "value": ""
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Mengambil data karyawan aktif dari API eksternal dengan parameter search (opsional) dan limit (opsional, batas 1-200)."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Data karyawan berhasil diambil\",\n  \"data\": [\n    {\n      \"username\": \"imashuster\",\n      \"name\": \"Ms. Ima Schuster\",\n      \"departemen\": \"Resto\",\n      \"pos\": \"Waiter\",\n      \"email\": \"ima.schuster@salokapark.com\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Karyawan metadata integrated with external employee API."
+    },
+    {
+      "name": "Fonnte",
+      "item": [
+        {
+          "name": "Send WhatsApp Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"081234567890\",\n  \"message\": \"Halo, ini adalah pesan uji coba pengiriman notifikasi WhatsApp via Fonnte!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/fonnte/send",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fonnte",
+                "send"
+              ]
+            },
+            "description": "Mengirimkan pesan notifikasi WhatsApp secara manual melalui gateway Fonnte."
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"target\": \"081234567890\",\n  \"message\": \"Halo, ini adalah pesan uji coba pengiriman notifikasi WhatsApp via Fonnte!\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/fonnte/send",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "fonnte",
+                    "send"
+                  ]
+                },
+                "description": "Mengirimkan pesan notifikasi WhatsApp secara manual melalui gateway Fonnte."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Pesan Fonnte berhasil dikirim\",\n  \"data\": null\n}"
+            }
+          ]
+        }
+      ],
+      "description": "WhatsApp notification gateway using Fonnte API."
+    },
+    {
+      "name": "Store Package",
+      "item": [
+        {
+          "name": "Get All Store Packages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/store-packages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "store-packages"
+              ]
+            },
+            "description": "Mengambil semua daftar Store Package beserta jumlah aset yang dimapping."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Detail Store Package",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/store-packages/JFLF",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "store-packages",
+                "JFLF"
+              ]
+            },
+            "description": "Mengambil detail aset-aset yang terdaftar pada store dengan kode store tertentu."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Store Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"store_code\": \"JFLF\",\n  \"asset_ids\": [1, 2, 3]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/store-packages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "store-packages"
+              ]
+            },
+            "description": "Membuat mapping Store Package baru."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Store Package",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_ids\": [1, 2, 4]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/store-packages/JFLF",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "store-packages",
+                "JFLF"
+              ]
+            },
+            "description": "Memperbarui / mensinkronisasi daftar asset di dalam Store Package."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Store Package",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/store-packages/JFLF",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "store-packages",
+                "JFLF"
+              ]
+            },
+            "description": "Menghapus seluruh mapping asset pada Store Package tersebut."
+          },
+          "response": []
+        }
+      ],
+      "description": "Store Package endpoints to manage permanent store inventory mappings."
+    },
+    {
+      "name": "Locations",
+      "item": [
+        {
+          "name": "Get All Locations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/locations?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "locations"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "15"
+                }
+              ]
+            },
+            "description": "Mengambil semua daftar lokasi aset."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Location By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/locations/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "locations",
+                "1"
+              ]
+            },
+            "description": "Mengambil detail lokasi berdasarkan ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Resto Utama\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/locations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            },
+            "description": "Membuat lokasi baru."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Resto Barat\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/locations/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "locations",
+                "1"
+              ]
+            },
+            "description": "Mengubah nama lokasi berdasarkan ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Location",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/locations/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "locations",
+                "1"
+              ]
+            },
+            "description": "Menghapus lokasi berdasarkan ID."
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD operations for asset locations."
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Dashboard Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard"
+              ]
+            },
+            "description": "Mengambil metrik statistik dashboard seperti total aset, aset aktif, rusak, dipinjam, dll."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Dashboard Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dashboard/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                "export"
+              ]
+            },
+            "description": "Mengekspor data ringkasan dashboard ke dalam file Excel."
+          },
+          "response": []
+        }
+      ],
+      "description": "Dashboard statistics and exports."
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "asset_code",
+      "value": "AST-TAS-001"
+    },
+    {
+      "key": "api_key",
+      "value": ""
+    }
+  ]
+}

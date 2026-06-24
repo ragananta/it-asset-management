@@ -19,7 +19,7 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         try {
-            $data = Cache::remember('dashboard:index', now()->addSeconds(30), function () {
+            $data = Cache::remember('dashboard:index', 600, function () {
                 $conditionStats = MasterAsset::select(
                     DB::raw('COUNT(*) as total'),
                     DB::raw("SUM(CASE WHEN condition_status = 'good' THEN 1 ELSE 0 END) as good"),
@@ -46,6 +46,37 @@ class DashboardController extends Controller
                     ->limit(8)
                     ->get();
 
+                // Optimized Ploting Device Stats based on Tas Category Assets
+                $tasCategory = Category::where('code', 'CAT-TAS')->first();
+                $tasCategoryId = $tasCategory ? $tasCategory->id : null;
+
+                if ($tasCategoryId) {
+                    $tasStats = MasterAsset::where('category_id', $tasCategoryId)
+                        ->select(
+                            DB::raw('COUNT(*) as total'),
+                            DB::raw("SUM(CASE WHEN status = 'active' AND condition_status != 'under_maintenance' THEN 1 ELSE 0 END) as available"),
+                            DB::raw("SUM(CASE WHEN status = 'borrowed' THEN 1 ELSE 0 END) as borrowed"),
+                            DB::raw("SUM(CASE WHEN condition_status = 'under_maintenance' THEN 1 ELSE 0 END) as maintenance"),
+                            DB::raw("SUM(CASE WHEN status = 'disposed' THEN 1 ELSE 0 END) as lost")
+                        )->first();
+
+                    $plotingDeviceStats = [
+                        'total'       => (int) ($tasStats->total ?? 0),
+                        'available'   => (int) ($tasStats->available ?? 0),
+                        'borrowed'    => (int) ($tasStats->borrowed ?? 0),
+                        'maintenance' => (int) ($tasStats->maintenance ?? 0),
+                        'lost'        => (int) ($tasStats->lost ?? 0),
+                    ];
+                } else {
+                    $plotingDeviceStats = [
+                        'total'       => 0,
+                        'available'   => 0,
+                        'borrowed'    => 0,
+                        'maintenance' => 0,
+                        'lost'        => 0,
+                    ];
+                }
+
                 return [
                     'stats' => [
                         'total_assets'     => (int) $conditionStats->total,
@@ -55,8 +86,9 @@ class DashboardController extends Controller
                         'total_borrowed'   => $totalBorrowed,
                         'total_categories' => $totalCategories,
                     ],
-                    'condition_chart' => $conditionChart,
-                    'category_chart'  => $categoryChart,
+                    'ploting_device_stats' => $plotingDeviceStats,
+                    'condition_chart'      => $conditionChart,
+                    'category_chart'       => $categoryChart,
                 ];
             });
 

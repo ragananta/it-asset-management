@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { useKaryawan } from "../../context/KaryawanContext";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
+import { usePolling } from "@/hooks/usePolling";
 import {
   Users,
   ChevronDown,
@@ -46,6 +48,7 @@ interface PaginationInfo {
 
 export default function AssetsByEmployee() {
   const { karyawanList, ensureKaryawan } = useKaryawan();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // State data
   const [employees, setEmployees] = useState<GroupedEmployee[]>([]);
@@ -59,13 +62,42 @@ export default function AssetsByEmployee() {
   // UI and Filters
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [filterDept, setFilterDept] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
-  const [currentPage, setCurrentPage] = useState(1);
+  const [filterDept, setFilterDept] = useState(() => searchParams.get("category") || "");
+  const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(searchParams.get("page") || "1", 10);
+  });
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "user_name");
+  const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "asc");
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+  const [deptSearchQuery, setDeptSearchQuery] = useState("");
+
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (currentPage > 1) params.page = String(currentPage);
+    if (search) params.search = search;
+    if (filterDept) params.category = filterDept;
+    if (sortBy && sortBy !== "user_name") params.sort = sortBy;
+    if (sortOrder && sortOrder !== "asc") params.order = sortOrder;
+    setSearchParams(params, { replace: true });
+  }, [currentPage, search, filterDept, rowsPerPage, sortBy, sortOrder, setSearchParams]);
+
   const [refreshKey, setRefreshKey] = useState(0);
-  
+
+  const isSilentRef = useRef(false);
+  const isFetchingRef = useRef(false);
+
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    setRefreshKey((k) => k + 1);
+  };
+
+  usePolling(triggerSilentRefresh, 60000);
+
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchInput = (val: string) => {
@@ -75,6 +107,15 @@ export default function AssetsByEmployee() {
       setSearch(val);
       setCurrentPage(1);
     }, 400);
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
   };
 
   // Accordion state (expanded employee names)
@@ -108,12 +149,42 @@ export default function AssetsByEmployee() {
     return Array.from(depts).sort();
   }, [karyawanList]);
 
+  const filteredDeptOptions = useMemo(() => {
+    if (!deptSearchQuery) return departmentOptions;
+    return departmentOptions.filter((dept) =>
+      dept.toLowerCase().includes(deptSearchQuery.toLowerCase())
+    );
+  }, [departmentOptions, deptSearchQuery]);
+
+  const sortedEmployees = useMemo(() => {
+    const list = [...employees];
+    list.sort((a, b) => {
+      const valA = a[sortBy as keyof GroupedEmployee] ?? "";
+      const valB = b[sortBy as keyof GroupedEmployee] ?? "";
+
+      if (typeof valA === "string") {
+        return sortOrder === "asc"
+          ? valA.localeCompare(valB as string)
+          : (valB as string).localeCompare(valA);
+      } else {
+        return sortOrder === "asc"
+          ? (valA as number) - (valB as number)
+          : (valB as number) - (valA as number);
+      }
+    });
+    return list;
+  }, [employees, sortBy, sortOrder]);
+
   // Fetch report data
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     const fetchData = async () => {
+      if (isFetchingRef.current) return;
       try {
-        setLoading(true);
+        isFetchingRef.current = true;
+        if (!isSilentRef.current) {
+          setLoading(true);
+        }
         const params = new URLSearchParams({
           page: String(currentPage),
           per_page: String(rowsPerPage)
@@ -121,23 +192,35 @@ export default function AssetsByEmployee() {
         if (filterDept) params.append("department", filterDept);
         if (search) params.append("search", search);
 
-        const res = await api.get(`/reports/assets-by-employee?${params}`, { noCache: true } as any);
-        if (!active) return;
+        const res = await api.get(`/reports/assets-by-employee?${params}`, {
+          signal: controller.signal,
+          noCache: true
+        } as any);
 
         const payload = res?.data?.data;
         if (payload) {
           setEmployees(payload.employees || []);
           setPagination(payload.pagination || { current_page: 1, per_page: 10, total: 0, last_page: 1 });
         }
-      } catch (err) {
-        if (active) console.error("ERROR fetch assets-by-employee:", err);
+      } catch (err: any) {
+        if (err.name !== "CanceledError") {
+          console.error("ERROR fetch assets-by-employee:", err);
+        }
       } finally {
-        if (active) setLoading(false);
+        isFetchingRef.current = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          if (!isSilentRef.current) {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+          isSilentRef.current = false;
+        }
       }
     };
     fetchData();
     return () => {
-      active = false;
+      controller.abort();
+      isFetchingRef.current = false;
     };
   }, [currentPage, rowsPerPage, filterDept, search, refreshKey]);
 
@@ -217,21 +300,92 @@ export default function AssetsByEmployee() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           {/* Department Filter */}
-          <select
-            value={filterDept}
-            onChange={(e) => {
-              setFilterDept(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="border border-gray-200 rounded-full px-5 py-2.5 appearance-none text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 bg-white cursor-pointer w-full sm:w-64 shadow-sm"
-          >
-            <option value="">Semua Departemen</option>
-            {departmentOptions.map((dept) => (
-              <option key={dept} value={dept}>
-                {dept}
-              </option>
-            ))}
-          </select>
+          <div className="relative w-full sm:w-64">
+            <button
+              type="button"
+              onClick={() => setShowDeptDropdown(!showDeptDropdown)}
+              className="w-full h-10 px-5 flex items-center justify-between rounded-full border border-gray-250 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer"
+            >
+              <span className={filterDept ? "text-slate-800 font-semibold" : "text-gray-400"}>
+                {filterDept || "Semua Departemen"}
+              </span>
+              <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+            </button>
+
+            {showDeptDropdown && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => {
+                    setShowDeptDropdown(false);
+                    setDeptSearchQuery("");
+                  }}
+                />
+                <div className="absolute left-0 right-0 mt-1.5 max-h-60 overflow-hidden bg-white border border-gray-200 rounded-xl shadow-lg z-20 flex flex-col">
+                  <div className="p-2 border-b border-gray-150 bg-slate-50/50 relative flex items-center">
+                    <input
+                      type="text"
+                      placeholder="Cari departemen..."
+                      value={deptSearchQuery}
+                      onChange={(e) => setDeptSearchQuery(e.target.value)}
+                      className="w-full h-8 pl-8 pr-7 text-xs bg-white border border-gray-255 rounded-lg outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition placeholder:text-gray-400"
+                      autoFocus
+                    />
+                    <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400" />
+                    {deptSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setDeptSearchQuery("")}
+                        className="absolute right-3 text-gray-400 hover:text-gray-650"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="overflow-y-auto divide-y divide-gray-100 flex-1 max-h-48 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterDept("");
+                        setCurrentPage(1);
+                        setShowDeptDropdown(false);
+                        setDeptSearchQuery("");
+                      }}
+                      className={`w-full text-left p-3 text-xs transition hover:bg-slate-50 ${
+                        !filterDept ? "bg-brand-50/50 font-semibold text-brand-700" : "text-slate-700"
+                      }`}
+                    >
+                      Semua Departemen
+                    </button>
+                    {filteredDeptOptions.length === 0 ? (
+                      <div className="p-3 text-xs text-gray-450 font-medium text-center">
+                        Tidak ada departemen ditemukan.
+                      </div>
+                    ) : (
+                      filteredDeptOptions.map((dept) => (
+                        <button
+                          key={dept}
+                          type="button"
+                          onClick={() => {
+                            setFilterDept(dept);
+                            setCurrentPage(1);
+                            setShowDeptDropdown(false);
+                            setDeptSearchQuery("");
+                          }}
+                          className={`w-full text-left p-3 text-xs transition hover:bg-slate-50 ${
+                            filterDept === dept ? "bg-brand-50/50 font-semibold text-brand-700" : "text-slate-700"
+                          }`}
+                        >
+                          {dept}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Search Box */}
           <div className="relative w-full sm:w-80">
@@ -300,6 +454,36 @@ export default function AssetsByEmployee() {
         />
       )}
 
+      {/* Table-like headers for sorting */}
+      {!loading && employees.length > 0 && (
+        <div className="bg-white rounded-xl px-6 py-3.5 flex items-center justify-between text-slate-500 font-semibold text-xs uppercase tracking-wider select-none border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="w-12 shrink-0" />
+            <button 
+              onClick={() => handleSort("user_name")}
+              className="font-semibold cursor-pointer hover:text-slate-800 transition flex items-center gap-1 focus:outline-none truncate"
+            >
+              <span>Nama Karyawan</span>
+            </button>
+          </div>
+          <div className="flex items-center gap-6 shrink-0">
+            <button 
+              onClick={() => handleSort("total_value")}
+              className="hidden sm:flex w-32 justify-end font-semibold cursor-pointer hover:text-slate-850 transition items-center gap-1 focus:outline-none"
+            >
+              <span>Total Nilai</span>
+            </button>
+            <button 
+              onClick={() => handleSort("total_assets")}
+              className="w-24 justify-end font-semibold cursor-pointer hover:text-slate-850 transition flex items-center gap-1 focus:outline-none"
+            >
+              <span>Total Aset</span>
+            </button>
+            <div className="w-8 shrink-0" />
+          </div>
+        </div>
+      )}
+
       {/* GROUPED CONTENT CARDS */}
       <div className="flex flex-col gap-4">
         {loading ? (
@@ -342,7 +526,7 @@ export default function AssetsByEmployee() {
           </div>
         ) : (
           // Data list
-          employees.map((emp) => {
+          sortedEmployees.map((emp) => {
             const isExpanded = !!expandedEmployees[emp.user_name];
             
             // Resolve department details from map
@@ -358,49 +542,53 @@ export default function AssetsByEmployee() {
                 {/* Accordion Header */}
                 <div
                   onClick={() => toggleExpand(emp.user_name)}
-                  className="p-5 flex items-center justify-between cursor-pointer select-none hover:bg-slate-50/50 transition duration-150"
+                  className="px-6 py-5 flex items-center justify-between cursor-pointer select-none hover:bg-slate-50/50 transition duration-150"
                 >
-                  <div className="flex items-center gap-4">
+                  {/* Left section: Avatar + Nama Karyawan */}
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
                     {/* Circle avatar badge */}
                     <div className="w-12 h-12 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center border border-brand-100 shrink-0">
                       <Users className="w-5.5 h-5.5 text-brand-600" />
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                      <h4 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                        {emp.user_name}
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <h4 className="font-bold text-slate-800 text-base flex items-center gap-2 truncate">
+                        <span className="truncate">{emp.user_name}</span>
                         {emp.phone && (
                           <a
                             href={`https://wa.me/${emp.phone.replace(/[^0-9]/g, "")}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition"
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition shrink-0"
                             title={`Hubungi WhatsApp: ${emp.phone}`}
                           >
                             <Phone className="w-3.5 h-3.5" />
                           </a>
                         )}
                       </h4>
-                      <p className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="flex items-center gap-1 font-semibold text-slate-600">
-                          <Briefcase className="w-3.5 h-3.5 text-gray-400" /> {position}
+                      <p className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-1 truncate">
+                        <span className="flex items-center gap-1 font-semibold text-slate-600 truncate">
+                          <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" /> <span className="truncate">{position}</span>
                         </span>
                         <span className="text-gray-300">•</span>
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5 text-gray-400" /> {department}
+                        <span className="flex items-center gap-1 truncate">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" /> <span className="truncate">{department}</span>
                         </span>
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6">
-                    {/* Summary badges */}
-                    <div className="flex items-center gap-4 text-right">
-                      <div className="hidden sm:flex flex-col items-end">
-                        <span className="text-xs text-slate-450">Total Nilai</span>
-                        <span className="text-sm font-bold text-brand-600">{formatRupiah(emp.total_value)}</span>
-                      </div>
+                  {/* Right section: Total Nilai + Total Aset + Chevron icon */}
+                  <div className="flex items-center gap-6 shrink-0">
+                    {/* Total Nilai Value (w-32) */}
+                    <div className="hidden sm:flex flex-col items-end w-32 justify-center">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide">Total Nilai</span>
+                      <span className="text-sm font-bold text-brand-600">{formatRupiah(emp.total_value)}</span>
+                    </div>
+
+                    {/* Total Aset Badge (w-24) */}
+                    <div className="w-24 flex justify-end">
                       <div className="bg-brand-50 border border-brand-100 rounded-full px-3 py-1 flex items-center gap-2 shadow-sm text-xs font-semibold text-brand-700 select-none">
                         <span className="text-brand-600 text-[10px] font-bold uppercase tracking-wider">Aset</span>
                         <span className="bg-brand-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-extrabold shadow-sm">
@@ -409,8 +597,8 @@ export default function AssetsByEmployee() {
                       </div>
                     </div>
 
-                    {/* Expand/Collapse Icon */}
-                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 transition-transform duration-300 hover:bg-gray-100 border border-gray-200">
+                    {/* Expand/Collapse Chevron Button (w-8) */}
+                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 transition-transform duration-300 hover:bg-gray-100 border border-gray-200 shrink-0">
                       {isExpanded ? (
                         <ChevronUp className="w-4 h-4 transition-transform duration-300" />
                       ) : (
@@ -436,15 +624,8 @@ export default function AssetsByEmployee() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                          {[...emp.assets]
-                            .sort((a, b) => {
-                              const dateA = new Date(a.assign_date).getTime();
-                              const dateB = new Date(b.assign_date).getTime();
-                              if (dateB !== dateA) return dateB - dateA;
-                              return b.id - a.id;
-                            })
-                            .map((asset) => (
-                            <tr key={asset.id} className="hover:bg-brand-50/15 transition">
+                          {emp.assets.map((asset) => (
+                            <tr key={asset.id} className="hover:bg-slate-50/50 transition">
                               <td className="py-3.5 px-4 font-semibold text-slate-700 font-mono text-xs">
                                 {asset.asset_code}
                               </td>

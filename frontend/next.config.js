@@ -1,1 +1,0 @@
-// Unused config file. This project is built using Vite (see vite.config.ts).

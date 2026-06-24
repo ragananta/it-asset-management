@@ -19,6 +19,8 @@ class MasterAsset extends Model
     'asset_name',
     'category_id',
     'location_id',
+    'store_id',
+    'store_name',
     'assigned_user_id',
     'brand',
     'model',
@@ -37,6 +39,29 @@ class MasterAsset extends Model
         'warranty_expired' => 'date',
         'purchase_price'  => 'decimal:2',
     ];
+
+    protected static function booted()
+    {
+        $clearCache = function () {
+            \Illuminate\Support\Facades\Cache::forget('dashboard:index');
+            
+            $keys = \Illuminate\Support\Facades\Cache::get('assets:cache_keys', []);
+            foreach ($keys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('assets:cache_keys');
+
+            $optKeys = \Illuminate\Support\Facades\Cache::get('assets:option_keys', []);
+            foreach ($optKeys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('assets:option_keys');
+        };
+
+        static::saved($clearCache);
+        static::deleted($clearCache);
+        static::restored($clearCache);
+    }
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -80,5 +105,26 @@ class MasterAsset extends Model
     public function assignments()
     {
         return $this->hasMany(AssetAssignment::class, 'asset_id');
+    }
+
+    public function activeAssignment()
+    {
+        return $this->hasOne(AssetAssignment::class, 'asset_id')->whereNull('return_date');
+    }
+
+    public function containedAssets()
+    {
+        return $this->belongsToMany(MasterAsset::class, 'asset_containers', 'container_asset_id', 'contained_asset_id')
+            ->withTimestamps();
+    }
+
+    public function containerAsset()
+    {
+        return $this->hasOne(AssetContainer::class, 'contained_asset_id');
+    }
+
+    public function storeAssetMapping()
+    {
+        return $this->hasOne(StoreAssetMapping::class, 'asset_id');
     }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import {
   Search, Package, ChevronDown, ChevronUp,
@@ -510,18 +510,34 @@ const buildTimeline = (asset: Asset): TimelineEvent[] => {
 
 export default function AuditLogList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [loadingAssets, setLoadingAssets] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
-  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(searchParams.get("page") || "1", 10);
+  });
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "created_at");
+  const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "desc");
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (currentPage > 1) params.page = String(currentPage);
+    if (search) params.search = search;
+    if (sortBy && sortBy !== "created_at") params.sort = sortBy;
+    if (sortOrder && sortOrder !== "desc") params.order = sortOrder;
+    setSearchParams(params, { replace: true });
+  }, [currentPage, search, rowsPerPage, sortBy, sortOrder, setSearchParams]);
+
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -536,6 +552,8 @@ export default function AuditLogList() {
   const [timelineTotal, setTimelineTotal] = useState(0);
   const [timelineLastPage, setTimelineLastPage] = useState(1);
   const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [typeSearchQuery, setTypeSearchQuery] = useState("");
   const timelineSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchInput = (val: string) => {
@@ -553,20 +571,35 @@ export default function AuditLogList() {
     }, 350);
   };
 
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+    setCurrentPage(1);
+  };
+
+  const isFetchingRef = useRef(false);
+
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     const fetchAssets = async () => {
+      if (isFetchingRef.current) return;
       try {
+        isFetchingRef.current = true;
         setLoadingAssets(true);
         const params = new URLSearchParams({
           page: String(currentPage),
           per_page: String(rowsPerPage),
         });
         if (search) params.append("search", search);
+        if (sortBy) params.append("sort_by", sortBy);
+        if (sortOrder) params.append("sort_order", sortOrder);
 
-        const res = await api.get(`/assets?${params}`);
-        if (cancelled) return;
+        const res = await api.get(`/assets?${params}`, { signal: controller.signal });
 
         const payload = res?.data?.data;
         if (payload?.data) {
@@ -579,16 +612,25 @@ export default function AuditLogList() {
           setTotalData(data.length);
           setTotalPages(1);
         }
-      } catch (err) {
-        if (!cancelled) console.error(err);
+      } catch (err: any) {
+        if (err.name !== "CanceledError") {
+          console.error(err);
+        }
       } finally {
-        if (!cancelled) setLoadingAssets(false);
+        isFetchingRef.current = false;
+        if (!controller.signal.aborted) {
+          setLoadingAssets(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
     };
 
     fetchAssets();
-    return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search]);
+    return () => {
+      controller.abort();
+      isFetchingRef.current = false;
+    };
+  }, [currentPage, rowsPerPage, search, sortBy, sortOrder]);
 
   const detailCache = useRef<Record<number, Asset>>({});
 
@@ -629,12 +671,16 @@ export default function AuditLogList() {
     }
   }, [selectedAsset?.id]);
 
+  const isFetchingTimelineRef = useRef(false);
+
   useEffect(() => {
     if (!selectedAsset?.id) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
     const fetchTimeline = async () => {
+      if (isFetchingTimelineRef.current) return;
       try {
+        isFetchingTimelineRef.current = true;
         setTimelineLoading(true);
         const params = new URLSearchParams({
           page: String(timelinePage),
@@ -644,28 +690,33 @@ export default function AuditLogList() {
         if (timelineType !== "all") params.append("type", timelineType);
         if (timelineSearch) params.append("search", timelineSearch);
 
-        const res = await api.get(`/assets/${selectedAsset.id}/timeline?${params}`);
-        if (cancelled) return;
+        const res = await api.get(`/assets/${selectedAsset.id}/timeline?${params}`, { signal: controller.signal });
 
         const payload = res?.data?.data || {};
         setTimelineGroups(payload.year_groups || []);
         setTimelineTotal(payload.meta?.total || 0);
         setTimelineLastPage(payload.meta?.last_page || 1);
         setExpandedId(null);
-      } catch (err) {
-        if (!cancelled) {
+      } catch (err: any) {
+        if (err.name !== "CanceledError") {
           console.error(err);
           setTimelineGroups([]);
           setTimelineTotal(0);
           setTimelineLastPage(1);
         }
       } finally {
-        if (!cancelled) setTimelineLoading(false);
+        isFetchingTimelineRef.current = false;
+        if (!controller.signal.aborted) {
+          setTimelineLoading(false);
+        }
       }
     };
 
     fetchTimeline();
-    return () => { cancelled = true; };
+    return () => {
+      controller.abort();
+      isFetchingTimelineRef.current = false;
+    };
   }, [selectedAsset?.id, timelineType, timelineSearch, timelinePage, timelineRowsPerPage, timelineRefreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
@@ -717,6 +768,27 @@ export default function AuditLogList() {
             onRowsPerPageChange={setRowsPerPage}
             className="mb-3"
           />
+
+          <div className="flex items-center justify-between px-5 py-2.5 text-xs font-semibold text-slate-500 bg-gray-100/50 border border-gray-250/20 rounded-lg mb-3 select-none">
+            <button
+              onClick={() => handleSort("asset_name")}
+              className="flex items-center gap-1 hover:text-slate-800 focus:outline-none font-semibold"
+            >
+              <span>Nama Aset</span>
+              {sortBy === "asset_name" && (
+                sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-750" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-750" />
+              )}
+            </button>
+            <button
+              onClick={() => handleSort("asset_code")}
+              className="flex items-center gap-1 hover:text-slate-800 focus:outline-none font-semibold"
+            >
+              <span>Kode Aset</span>
+              {sortBy === "asset_code" && (
+                sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-750" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-750" />
+              )}
+            </button>
+          </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             {loadingAssets ? (
@@ -794,18 +866,86 @@ export default function AuditLogList() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <select
-                      value={timelineType}
-                      onChange={(e) => {
-                        setTimelineType(e.target.value as TimelineCategory);
-                        setTimelinePage(1);
-                      }}
-                      className="sm:w-48 border border-gray-200 rounded-full px-4 py-2 appearance-none text-sm text-gray-705 bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
-                    >
-                      {timelineFilters.map((filter) => (
-                        <option key={filter.value} value={filter.value}>{filter.label}</option>
-                      ))}
-                    </select>
+                    <div className="relative sm:w-48 w-full">
+                      <button
+                        type="button"
+                        onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                        className="w-full h-10 px-5 flex items-center justify-between rounded-full border border-gray-200 bg-white text-sm text-gray-705 hover:bg-gray-50 focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer transition-all"
+                      >
+                        <span className={timelineType !== "all" ? "text-brand-600 font-semibold truncate" : "text-slate-700 truncate"}>
+                          {timelineFilters.find(f => f.value === timelineType)?.label || "Semua Aktivitas"}
+                        </span>
+                        <ChevronDown className="w-4 h-4 text-gray-400 shrink-0 ml-1" />
+                      </button>
+
+                      {showTypeDropdown && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => {
+                              setShowTypeDropdown(false);
+                              setTypeSearchQuery("");
+                            }}
+                          />
+                          <div className="absolute left-0 mt-1.5 w-56 overflow-hidden bg-white border border-gray-200 rounded-xl shadow-lg z-20 flex flex-col animate-in fade-in slide-in-from-top-1 duration-100">
+                            <div className="p-2 border-b border-gray-150 bg-slate-50/50 relative flex items-center">
+                              <input
+                                type="text"
+                                placeholder="Cari aktivitas..."
+                                value={typeSearchQuery}
+                                onChange={(e) => setTypeSearchQuery(e.target.value)}
+                                className="w-full h-8 pl-8 pr-7 text-xs bg-white border border-gray-255 rounded-lg outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition placeholder:text-gray-400"
+                                autoFocus
+                              />
+                              <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400" />
+                              {typeSearchQuery && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTypeSearchQuery("")}
+                                  className="absolute right-3 text-gray-400 hover:text-gray-650"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="overflow-y-auto divide-y divide-gray-100 flex-1 max-h-48 bg-white">
+                              {timelineFilters
+                                .filter((filter) =>
+                                  filter.label.toLowerCase().includes(typeSearchQuery.toLowerCase())
+                                )
+                                .length === 0 ? (
+                                <div className="p-3 text-xs text-gray-400 font-medium text-center">
+                                  Tidak ada aktivitas ditemukan.
+                                </div>
+                              ) : (
+                                timelineFilters
+                                  .filter((filter) =>
+                                    filter.label.toLowerCase().includes(typeSearchQuery.toLowerCase())
+                                  )
+                                  .map((filter) => (
+                                    <button
+                                      key={filter.value}
+                                      type="button"
+                                      onClick={() => {
+                                        setTimelineType(filter.value);
+                                        setTimelinePage(1);
+                                        setShowTypeDropdown(false);
+                                        setTypeSearchQuery("");
+                                      }}
+                                      className={`w-full text-left p-3 text-xs transition hover:bg-slate-50 ${
+                                        timelineType === filter.value ? "bg-brand-50/50 font-semibold text-brand-700" : "text-slate-700"
+                                      }`}
+                                    >
+                                      {filter.label}
+                                    </button>
+                                  ))
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
 
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />

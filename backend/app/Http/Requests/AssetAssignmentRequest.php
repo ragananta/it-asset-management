@@ -20,51 +20,24 @@ class AssetAssignmentRequest extends FormRequest
             'return_date' => 'nullable|date|after_or_equal:assign_date',
             'note'        => 'nullable|string',
         ];
-    }
-
-    public function store(AssetAssignmentRequest $request)
+    }    public function withValidator($validator)
     {
-        try {
-            $asset = MasterAsset::find($request->asset_id);
-            if (!$asset) {
-                return $this->notFoundResponse('Aset tidak ditemukan');
+        $validator->after(function ($validator) {
+            $assetId = $this->input('asset_id');
+            if (!$assetId) return;
+
+            $query = \App\Models\AssetAssignment::where('asset_id', $assetId)
+                ->whereNull('return_date');
+
+            $id = $this->route('asset_assignment') ?: $this->route('id');
+            if ($id) {
+                $query->where('id', '!=', $id);
             }
 
-            // ── Cek apakah aset sedang dipinjam ──────────────────────────────
-            $alreadyBorrowed = AssetAssignment::where('asset_id', $request->asset_id)
-                ->whereNull('return_date')
-                ->exists();
-
-            if ($alreadyBorrowed) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Aset ini sedang dipinjam dan belum dikembalikan.',
-                    'errors'  => [
-                        'asset_id' => ['Aset ini sedang dipinjam, tidak bisa dipinjam lagi sebelum dikembalikan.']
-                    ],
-                ], 422);
+            if ($query->exists()) {
+                $validator->errors()->add('asset_id', 'Aset ini sedang dipinjam, tidak bisa dipinjam lagi sebelum dikembalikan.');
             }
-
-            $assignment = AssetAssignment::create($request->validated());
-
-            $asset->update(['assigned_user_id' => null]);
-
-            $this->writeLog($request, 'create_data', "Aset '{$asset->asset_name}' ditugaskan kepada '{$assignment->user_name}'");
-
-            if ($assignment->phone) {
-                $this->fonnte->notifyBorrowed(
-                    phone:        $assignment->phone,
-                    borrowerName: $assignment->user_name,
-                    assetName:    $asset->asset_name,
-                    assignDate:   $assignment->assign_date,
-                    returnDate:   $assignment->return_date,
-                );
-            }
-
-            return $this->createdResponse($assignment->load('asset'), 'Penugasan aset berhasil ditambahkan');
-        } catch (\Exception $e) {
-            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
-        }
+        });
     }
 
     public function messages(): array

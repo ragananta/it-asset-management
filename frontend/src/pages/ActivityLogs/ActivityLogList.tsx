@@ -1,8 +1,11 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
-import { Search, ActivitySquare, Monitor, Globe, X, Filter } from "lucide-react";
+import { Search, ActivitySquare, Monitor, Globe, X, Filter, ChevronUp, ChevronDown } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
+import { usePolling } from "@/hooks/usePolling";
+import { DatePicker } from "../../components/ui/date-picker";
 
 interface User {
   id: number;
@@ -12,13 +15,13 @@ interface User {
 
 interface ActivityLog {
   id: number;
-  user_id: number;
+  user_id: number | null;
   activity: string;
   description: string;
   ip_address: string;
   user_agent: string;
   created_at: string;
-  user?: User;
+  user: User | null;
 }
 
 interface Filters {
@@ -28,50 +31,76 @@ interface Filters {
 }
 
 const activityLabel: Record<string, string> = {
-  login:       "Login",
-  logout:      "Logout",
-  register:    "Register",
   create_data: "Tambah Data",
-  update_data: "Ubah Data",
+  update_data: "Edit Data",
   delete_data: "Hapus Data",
 };
 
 const activityColor: Record<string, string> = {
-  login:       "text-teal-700 bg-teal-50",
-  logout:      "text-gray-600 bg-gray-100",
-  register:    "text-blue-700 bg-blue-50",
-  create_data: "text-green-700 bg-green-50",
-  update_data: "text-yellow-700 bg-yellow-50",
-  delete_data: "text-red-700 bg-red-50",
+  create_data: "text-emerald-700 bg-emerald-50 border border-emerald-200",
+  update_data: "text-blue-700 bg-blue-50 border border-blue-200",
+  delete_data: "text-rose-700 bg-rose-50 border border-rose-200",
 };
 
 const activityIcon: Record<string, string> = {
-  login:       "→",
-  logout:      "←",
-  register:    "✦",
   create_data: "+",
   update_data: "✎",
   delete_data: "✕",
 };
 
 export default function ActivityLogList() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
-  const [currentPage, setCurrentPage] = useState(1);
+  const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(searchParams.get("page") || "1", 10);
+  });
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "created_at");
+  const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "desc");
+
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  const isSilentRef = useRef(false);
+  const isFetchingRef = useRef(false);
+
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    setRefreshKey((k) => k + 1);
+  };
+
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<Filters>({ activity: "", date_from: "", date_to: "" });
+  const [filters, setFilters] = useState<Filters>({
+    activity: searchParams.get("status") || "",
+    date_from: searchParams.get("date_from") || "",
+    date_to: searchParams.get("date_to") || "",
+  });
   const filterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (currentPage > 1) params.page = String(currentPage);
+    if (search) params.search = search;
+    if (filters.activity) params.status = filters.activity;
+    if (filters.date_from) params.date_from = filters.date_from;
+    if (filters.date_to) params.date_to = filters.date_to;
+    if (sortBy && sortBy !== "created_at") params.sort = sortBy;
+    if (sortOrder && sortOrder !== "desc") params.order = sortOrder;
+    setSearchParams(params, { replace: true });
+  }, [currentPage, search, filters, rowsPerPage, sortBy, sortOrder, setSearchParams]);
 
   const [detailLog, setDetailLog] = useState<ActivityLog | null>(null);
   const [detailClosing, setDetailClosing] = useState(false);
+
+  usePolling(triggerSilentRefresh, 30000, !detailLog);
 
   // ── expand deskripsi per row ─────────────────────────────────────────────
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -145,13 +174,54 @@ export default function ActivityLogList() {
     };
   }, [detailLog, detailClosing]);
 
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+  };
+
+  const sortedLogs = useMemo(() => {
+    const list = [...logs];
+    list.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+
+      if (sortBy === "created_at") {
+        valA = new Date(a.created_at).getTime();
+        valB = new Date(b.created_at).getTime();
+      } else if (sortBy === "activity") {
+        valA = a.activity || "";
+        valB = b.activity || "";
+      } else if (sortBy === "user") {
+        valA = a.user?.name || "";
+        valB = b.user?.name || "";
+      }
+
+      if (typeof valA === "string") {
+        return sortOrder === "asc"
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      } else {
+        return sortOrder === "asc" ? valA - valB : valB - valA;
+      }
+    });
+    return list;
+  }, [logs, sortBy, sortOrder]);
+
   // ── Fetch logs ────────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     const fetchData = async () => {
+      if (isFetchingRef.current) return;
       try {
-        setLoading(true);
+        isFetchingRef.current = true;
+        if (!isSilentRef.current) {
+          setLoading(true);
+        }
         const params = new URLSearchParams({
           page: String(currentPage),
           per_page: String(rowsPerPage),
@@ -161,8 +231,7 @@ export default function ActivityLogList() {
         if (filters.date_from) params.append("date_from", filters.date_from);
         if (filters.date_to) params.append("date_to", filters.date_to);
 
-        const res = await api.get(`/logs?${params}`);
-        if (cancelled) return;
+        const res = await api.get(`/logs?${params}`, { signal: controller.signal });
 
         const payload = res?.data?.data;
         if (payload?.data) {
@@ -175,16 +244,28 @@ export default function ActivityLogList() {
           setTotalData(data.length);
           setTotalPages(1);
         }
-      } catch (err) {
-        if (!cancelled) console.error("ERROR fetch logs:", err);
+      } catch (err: any) {
+        if (err.name !== "CanceledError") {
+          console.error("ERROR fetch logs:", err);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        isFetchingRef.current = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          if (!isSilentRef.current) {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+          isSilentRef.current = false;
+        }
       }
     };
 
     fetchData();
-    return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search, filters]);
+    return () => {
+      controller.abort();
+      isFetchingRef.current = false;
+    };
+  }, [currentPage, rowsPerPage, search, filters, refreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
 
@@ -227,7 +308,7 @@ export default function ActivityLogList() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             placeholder="Cari user, IP..."
-            className="w-full pl-9 pr-20 py-2.5 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 shadow-sm"
+            className="w-full h-10 pl-9 pr-20 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
             value={searchInput}
             onChange={(e) => handleSearchInput(e.target.value)}
           />
@@ -243,7 +324,7 @@ export default function ActivityLogList() {
           <button
             onClick={() => setFilterOpen((v) => !v)}
             className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full shadow transition ${
-              activeFilterCount > 0 ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-indigo-500 text-white hover:bg-indigo-600"
+              activeFilterCount > 0 ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-teal-500 text-white hover:bg-teal-600"
             }`}
           >
             <Filter className="w-4 h-4" />
@@ -282,18 +363,16 @@ export default function ActivityLogList() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Dari</label>
-                <input type="date"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                <DatePicker
                   value={filters.date_from}
-                  onChange={(e) => { setFilters((f) => ({ ...f, date_from: e.target.value })); setCurrentPage(1); }}
+                  onChange={(val) => { setFilters((f) => ({ ...f, date_from: val })); setCurrentPage(1); }}
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Sampai</label>
-                <input type="date"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                <DatePicker
                   value={filters.date_to}
-                  onChange={(e) => { setFilters((f) => ({ ...f, date_to: e.target.value })); setCurrentPage(1); }}
+                  onChange={(val) => { setFilters((f) => ({ ...f, date_to: val })); setCurrentPage(1); }}
                 />
               </div>
               <button
@@ -354,12 +433,42 @@ export default function ActivityLogList() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12">NO</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase min-w-[180px]">User</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-36">Aktivitas</th>
+              <th 
+                onClick={() => handleSort("user")}
+                className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase min-w-[180px] cursor-pointer hover:bg-gray-100 hover:text-gray-700 transition"
+              >
+                <div className="flex items-center gap-1">
+                  <span>User</span>
+                  {sortBy === "user" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort("activity")}
+                className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-36 cursor-pointer hover:bg-gray-100 hover:text-gray-700 transition"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>Aktivitas</span>
+                  {sortBy === "activity" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Deskripsi</th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-32">IP Address</th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-24">Browser</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40">Waktu</th>
+              <th 
+                onClick={() => handleSort("created_at")}
+                className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 cursor-pointer hover:bg-gray-100 hover:text-gray-700 transition"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>Waktu</span>
+                  {sortBy === "created_at" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-20">Detail</th>
             </tr>
           </thead>
@@ -371,7 +480,7 @@ export default function ActivityLogList() {
                 {search || activeFilterCount > 0 ? "Tidak ada data yang cocok" : "Data aktivitas belum tersedia"}
               </td></tr>
             ) : (
-              logs.map((log, idx) => {
+              sortedLogs.map((log, idx) => {
                 const isExpanded = expandedRows.has(log.id);
                 return (
                   <tr

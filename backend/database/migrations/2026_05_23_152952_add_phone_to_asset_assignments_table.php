@@ -8,15 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('asset_assignments', function (Blueprint $table) {
-            $table->string('phone')->nullable()->after('user_name');
-        });
+        if (!Schema::hasColumn('asset_assignments', 'phone')) {
+            Schema::table('asset_assignments', function (Blueprint $table) {
+                $table->string('phone')->nullable()->after('user_name');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('asset_assignments', function (Blueprint $table) {
-            $table->dropColumn('phone');
-        });
+        if (Schema::hasColumn('asset_assignments', 'phone')) {
+            Schema::table('asset_assignments', function (Blueprint $table) {
+                $table->dropColumn('phone');
+            });
+        }
     }
 };

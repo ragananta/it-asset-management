@@ -23,6 +23,23 @@ class Category extends Model
         'is_active' => 'boolean',
     ];
 
+    protected static function booted()
+    {
+        $clearCache = function () {
+            \Illuminate\Support\Facades\Cache::forget('dashboard:index');
+            
+            $keys = \Illuminate\Support\Facades\Cache::get('categories:cache_keys', []);
+            foreach ($keys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('categories:cache_keys');
+        };
+
+        static::saved($clearCache);
+        static::deleted($clearCache);
+        static::restored($clearCache);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

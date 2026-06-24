@@ -118,7 +118,7 @@ class CategoryController extends Controller
     {
         try {
             $data = $request->validated();
-            if ($duplicateResponse = $this->duplicateCategoryResponse($data)) {
+            if ($duplicateResponse = $this->duplicateCategoryResponse($request)) {
                 return $duplicateResponse;
             }
 
@@ -146,7 +146,7 @@ class CategoryController extends Controller
             }
 
             $data = $request->validated();
-            if ($duplicateResponse = $this->duplicateCategoryResponse($data, (int) $category->id)) {
+            if ($duplicateResponse = $this->duplicateCategoryResponse($request, (int) $category->id)) {
                 return $duplicateResponse;
             }
 
@@ -241,34 +241,32 @@ class CategoryController extends Controller
         Cache::forget('dashboard:index');
     }
 
-    private function duplicateCategoryResponse(array $data, ?int $ignoreId = null)
+    private function duplicateCategoryResponse(Request $request, ?int $ignoreId = null)
     {
-        $nameQuery = Category::query()
+        $exists = Category::whereRaw('LOWER(name) = ?', [strtolower(trim($request->name))])
             ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower($data['name'])]);
+            ->exists();
 
-        if ($nameQuery->exists()) {
+        if ($exists) {
             return response()->json([
-                'success' => false,
-                'message' => 'Kategori sudah ada',
-                'errors' => [
-                    'name' => ['Nama kategori sudah digunakan.'],
-                ],
+                'message' => 'Nama kategori sudah digunakan.'
             ], 422);
         }
 
-        $codeQuery = Category::query()
-            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
-            ->whereRaw('LOWER(code) = ?', [mb_strtolower($data['code'])]);
-
-        if ($codeQuery->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Kode kategori sudah ada',
-                'errors' => [
-                    'code' => ['Kode kategori sudah digunakan.'],
-                ],
-            ], 422);
+        if ($request->filled('code')) {
+            $codeQuery = Category::whereRaw('LOWER(code) = ?', [mb_strtolower($request->code)]);
+            if ($ignoreId) {
+                $codeQuery->where('id', '!=', $ignoreId);
+            }
+            if ($codeQuery->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kode kategori sudah ada',
+                    'errors' => [
+                        'code' => ['Kode kategori sudah digunakan.'],
+                    ],
+                ], 422);
+            }
         }
 
         return null;

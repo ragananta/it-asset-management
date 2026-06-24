@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { isAuthenticated } from "../utils/auth";
 
 /**
  * Hook untuk auto-refresh data setiap X detik (polling)
  *
  * @param onRefresh  callback yang dipanggil tiap interval — biasanya trigger re-fetch
- * @param interval   interval dalam milidetik (default: 30000 = 30 detik)
+ * @param interval   interval dalam milidetik (default: 120000 = 120 detik)
  * @param enabled    aktif atau tidak (default: true) — set false kalau modal sedang terbuka
  *
  * @example
@@ -20,20 +21,42 @@ export function usePolling(
   enabled: boolean = true
 ) {
   const refreshRef = useRef(onRefresh);
+  const [focusTrigger, setFocusTrigger] = useState(0);
 
   useEffect(() => {
     refreshRef.current = onRefresh;
   }, [onRefresh]);
 
+  // Trigger refetch directly when browser tab becomes active/focused, and reset timer
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !isAuthenticated()) return;
+
+    const handleFocus = () => {
+      if (!document.hidden && isAuthenticated()) {
+        refreshRef.current();
+        setFocusTrigger((t) => t + 1);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleFocus);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [enabled]);
+
+  // Interval Timer
+  useEffect(() => {
+    if (!enabled || !isAuthenticated()) return;
 
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") {
+      if (!document.hidden && isAuthenticated()) {
         refreshRef.current();
       }
-    }, Math.max(interval, 120000));
+    }, Math.max(interval, 1000));
 
     return () => clearInterval(timer);
-  }, [enabled, interval]);
+  }, [enabled, interval, focusTrigger]);
 }

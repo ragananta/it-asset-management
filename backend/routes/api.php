@@ -12,6 +12,9 @@ use App\Http\Controllers\LogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\PlotingDeviceController;
+use App\Http\Controllers\SatsIntegrationController;
+use App\Http\Controllers\StorePackageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -48,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/assets/export', [MasterAssetController::class, 'export']);
     Route::get('/assets/generate-code/{categoryId}', [MasterAssetController::class, 'generateCode']);
     Route::get('/assets/{id}/timeline', [MasterAssetController::class, 'timeline']);
+    Route::get('/assets/lookup/{asset_code}', [MasterAssetController::class, 'lookup']);
 
     // Master Assets
     Route::apiResource('assets', MasterAssetController::class);
@@ -89,5 +93,33 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reports
     Route::get('/reports/assets-by-employee/export', [ReportController::class, 'exportByEmployee']);
     Route::get('/reports/assets-by-employee', [ReportController::class, 'assetsByEmployee']);
+
+    // Stores Options
+    Route::get('/stores/options', [PlotingDeviceController::class, 'storeOptions']);
+
+    // Ploting Devices CRUD & Timeline
+    Route::get('/ploting-devices/scan/{asset_code}', [PlotingDeviceController::class, 'scan']);
+    Route::get('/ploting-devices/{id}/timeline', [PlotingDeviceController::class, 'timeline']);
+    Route::apiResource('ploting-devices', PlotingDeviceController::class);
+
+    // Store Packages
+    Route::get('/store-packages', [StorePackageController::class, 'index']);
+    Route::get('/store-packages/{store_code}', [StorePackageController::class, 'show']);
+    Route::post('/store-packages', [StorePackageController::class, 'store']);
+    Route::put('/store-packages/{store_code}', [StorePackageController::class, 'update']);
+    Route::delete('/store-packages/{store_code}', [StorePackageController::class, 'destroy']);
+
+    // SATS Integrations
+    Route::prefix('integrations/sats')->group(function () {
+        // New bags endpoints
+        Route::get('/bags/{asset_code}', [SatsIntegrationController::class, 'getBagByQr']);
+        Route::get('/bags/{asset_code}/history', [SatsIntegrationController::class, 'history']);
+        Route::post('/bags/borrow',       [SatsIntegrationController::class, 'borrowBag']);
+        Route::post('/bags/return',       [SatsIntegrationController::class, 'returnBag']);
+        Route::post('/report-maintenance', [SatsIntegrationController::class, 'reportMaintenance']);
+    });
+
+    // Fonnte WhatsApp Notifications
+    Route::post('/fonnte/send', [\App\Http\Controllers\FonnteController::class, 'send']);
 
 });

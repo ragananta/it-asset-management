@@ -1,12 +1,14 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/api/axios";
 import {
   Package, CheckCircle, AlertTriangle, Wrench,
-  UserCheck, Tag, TrendingUp, Download, RefreshCw,
+  UserCheck, Tag, TrendingUp, Download, RefreshCw, Smartphone, Plus,
+  ChevronDown, ChevronUp
 } from "lucide-react";
 import { useKaryawan } from "@/context/KaryawanContext";
 import { fetchAllActiveAssignments, getAssetDistributionByDepartment } from "@/api/dashboardService";
+import { usePolling } from "@/hooks/usePolling";
 
 interface Stats {
   total_assets: number;
@@ -17,6 +19,14 @@ interface Stats {
   total_categories: number;
 }
 
+interface PlotingDeviceStats {
+  total: number;
+  available: number;
+  borrowed: number;
+  maintenance: number;
+  lost: number;
+}
+
 interface ChartItem {
   label: string;
   value: number;
@@ -25,14 +35,40 @@ interface ChartItem {
 
 interface DashboardData {
   stats: Stats;
+  ploting_device_stats: PlotingDeviceStats;
   condition_chart: ChartItem[];
   category_chart: ChartItem[];
 }
 
 const CATEGORY_COLORS = [
-  "#2ba56e", "#10b981", "#f59e0b", "#ef4444",
-  "#8b5cf6", "#06b6d4", "#f97316", "#84cc16",
+  "#059669", // Emerald-600
+  "#16a34a", // Green-600
+  "#d97706", // Amber-600
+  "#dc2626", // Red-600
+  "#64748b", // Slate-500
+  "#10b981", // Emerald-500
+  "#22c55e", // Green-500
+  "#475569", // Slate-600
 ];
+
+const getConditionColor = (label: string): string => {
+  const lower = label.toLowerCase();
+  if (lower.includes("bagus") || lower.includes("good")) return "#10b981"; // Emerald
+  if (lower.includes("rusak") || lower.includes("damaged")) return "#ef4444"; // Red
+  if (lower.includes("perbaikan") || lower.includes("maintenance")) return "#f59e0b"; // Amber
+  return "#64748b"; // Slate
+};
+
+const formatLastSync = (date: Date | null) => {
+  if (!date) return "-";
+  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const d = date.getDate();
+  const m = months[date.getMonth()];
+  const y = date.getFullYear();
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${d} ${m} ${y} ${hh}:${mm}`;
+};
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -44,17 +80,42 @@ export default function Dashboard() {
   const [exporting, setExporting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [filterDept, setFilterDept] = useState<"all" | "active" | "borrowed" | "maintenance">("all");
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [expandedDepts, setExpandedDepts] = useState<string[]>([]);
+
+  const toggleDeptExpand = (dept: string) => {
+    setExpandedDepts((prev) =>
+      prev.includes(dept) ? prev.filter((d) => d !== dept) : [...prev, dept]
+    );
+  };
+
+  const isSilentRef = useRef(false);
+  const isFetchingRef = useRef(false);
+
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    setRefreshKey((k) => k + 1);
+  };
+
+  usePolling(triggerSilentRefresh, 120000);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchData = async () => {
+      if (isFetchingRef.current) return;
       try {
-        setLoading(true);
-        setLoadingAssignments(true);
+        isFetchingRef.current = true;
+        if (!isSilentRef.current) {
+          setLoading(true);
+          setLoadingAssignments(true);
+        }
 
         const res = await api.get("/dashboard", { noCache: true } as any);
-        if (!cancelled) setData(res?.data?.data || null);
+        if (!cancelled) {
+          setData(res?.data?.data || null);
+          setLastSync(new Date());
+        }
 
         await ensureKaryawan();
 
@@ -63,9 +124,11 @@ export default function Dashboard() {
       } catch (err) {
         console.error("ERROR fetch dashboard data:", err);
       } finally {
+        isFetchingRef.current = false;
         if (!cancelled) {
           setLoading(false);
           setLoadingAssignments(false);
+          isSilentRef.current = false;
         }
       }
     };
@@ -96,6 +159,7 @@ export default function Dashboard() {
   };
 
   const stats = data?.stats;
+  const plotingDeviceStats = data?.ploting_device_stats;
   const conditionChart = data?.condition_chart || [];
   const categoryChart = data?.category_chart || [];
 
@@ -106,25 +170,19 @@ export default function Dashboard() {
     return getAssetDistributionByDepartment(assignments, karyawanList, filterDept);
   }, [assignments, karyawanList, filterDept]);
 
-  const topDepartment = useMemo(() => {
-    if (departmentDistribution.length === 0) return null;
-    return departmentDistribution[0];
-  }, [departmentDistribution]);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
-        <div className="animate-pulse space-y-5">
+        <div className="animate-pulse space-y-6">
           <div className="h-6 bg-gray-200 rounded w-48" />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded-2xl" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-gray-200 rounded-xl" />
             ))}
           </div>
-          <div className="h-72 bg-gray-200 rounded-2xl w-full" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-64 bg-gray-200 rounded-2xl" />
-            <div className="h-64 bg-gray-200 rounded-2xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-64 bg-gray-200 rounded-xl" />
+            <div className="h-64 bg-gray-200 rounded-xl" />
           </div>
         </div>
       </div>
@@ -132,27 +190,33 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 space-y-6">
+    <div className="min-h-screen bg-gray-50 p-6 space-y-8">
 
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Dashboard</h2>
-          <p className="text-xs text-slate-400 mt-1">Ringkasan data & analisis IT Asset Management</p>
+          <h2 className="text-[28px] font-black text-slate-800 tracking-tight">Dashboard</h2>
+          <p className="text-[12px] text-slate-400 mt-1">Ringkasan data & analisis IT Asset Management</p>
+          {lastSync && (
+            <p className="text-[12px] text-slate-500 mt-1.5 flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Last Sync: {formatLastSync(lastSync)}</span>
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => setRefreshKey((k) => k + 1)}
             disabled={loading}
             title="Refresh data"
-            className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200 shadow-sm flex items-center justify-center transition-all duration-300 hover:shadow active:scale-95 disabled:opacity-50"
+            className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-200 shadow-sm flex items-center justify-center transition-all duration-300 hover:shadow active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button
             onClick={handleExportAll}
             disabled={exporting}
-            className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 h-10 px-5 rounded-full text-xs font-semibold shadow-sm flex items-center gap-2.5 transition-all duration-300 hover:shadow hover:border-slate-300 hover:text-brand-600 hover:border-brand-200 active:scale-95 disabled:opacity-50"
+            className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 h-10 px-5 rounded-full text-[12px] font-semibold shadow-sm flex items-center gap-2.5 transition-all duration-300 hover:shadow hover:border-slate-300 hover:text-emerald-600 hover:border-emerald-250 active:scale-95 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
             {exporting ? "Menyiapkan..." : "Export Semua Data"}
@@ -160,270 +224,96 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* STATS CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
+      {/* SECTION 1 - KPI SUMMARY */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 
         {/* Total Asset */}
         <div
           onClick={() => navigate("/assets")}
-          className="group relative overflow-hidden bg-white rounded-xl shadow-sm border border-gray-100 border-t-4 border-t-brand-500 p-5 cursor-pointer hover:shadow hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
+          className="group bg-white rounded-xl shadow-sm border border-slate-200/60 p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Asset</p>
-            <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center transition-all duration-300 group-hover:bg-brand-600 group-hover:text-white group-hover:rotate-6">
+            <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider">Total Asset</p>
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:rotate-6">
               <Package className="w-4 h-4" />
             </div>
           </div>
           <div>
             <p className="text-3xl font-black text-slate-800 tracking-tight">{stats?.total_assets ?? "-"}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Semua tipe barang terdaftar</p>
-          </div>
-        </div>
-
-        {/* Asset Aktif */}
-        <div
-          onClick={() => navigate("/assets")}
-          className="group relative overflow-hidden bg-white rounded-xl shadow-sm border border-gray-100 border-t-4 border-t-emerald-500 p-5 cursor-pointer hover:shadow hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Asset Aktif</p>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110">
-              <CheckCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <p className="text-3xl font-black text-emerald-600 tracking-tight">{stats?.good_condition ?? "-"}</p>
-            {stats && (
-              <p className="text-[10px] text-slate-400 mt-1">
-                <span className="font-bold text-emerald-600">{Math.round((stats.good_condition / (stats.total_assets || 1)) * 100)}%</span> dari total aset
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Asset Rusak */}
-        <div
-          onClick={() => navigate("/assets")}
-          className="group relative overflow-hidden bg-white rounded-xl shadow-sm border border-gray-100 border-t-4 border-t-rose-500 p-5 cursor-pointer hover:shadow hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Asset Rusak</p>
-            <div className="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center transition-all duration-300 group-hover:bg-rose-600 group-hover:text-white group-hover:animate-bounce">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <p className="text-3xl font-black text-rose-500 tracking-tight">{stats?.damaged ?? "-"}</p>
-            <p className="text-[10px] text-slate-400 mt-1">
-              {stats && stats.damaged > 0 ? (
-                <span className="text-rose-500 font-medium animate-pulse">Butuh perbaikan segera</span>
-              ) : (
-                "Tidak ada kerusakan"
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Asset Maintenance */}
-        <div
-          onClick={() => navigate("/maintenance")}
-          className="group relative overflow-hidden bg-white rounded-xl shadow-sm border border-gray-100 border-t-4 border-t-amber-500 p-5 cursor-pointer hover:shadow hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Asset Maintenance</p>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center transition-all duration-300 group-hover:bg-amber-600 group-hover:text-white group-hover:rotate-12">
-              <Wrench className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <p className="text-3xl font-black text-amber-500 tracking-tight">{stats?.maintenance ?? "-"}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Sedang dalam perawatan</p>
+            <p className="text-[12px] text-slate-400 mt-1">Semua tipe barang terdaftar</p>
           </div>
         </div>
 
         {/* Asset Dipinjam */}
         <div
           onClick={() => navigate("/assignments")}
-          className="group relative overflow-hidden bg-white rounded-xl shadow-sm border border-gray-100 border-t-4 border-t-indigo-500 p-5 cursor-pointer hover:shadow hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
+          className="group bg-white rounded-xl shadow-sm border border-slate-200/60 p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Asset Dipinjam</p>
-            <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center transition-all duration-300 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110">
+            <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider">Asset Dipinjam</p>
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110">
               <UserCheck className="w-4 h-4" />
             </div>
           </div>
           <div>
-            <p className="text-3xl font-black text-indigo-600 tracking-tight">{stats?.total_borrowed ?? "-"}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Digunakan oleh karyawan</p>
+            <p className="text-3xl font-black text-emerald-600 tracking-tight">{stats?.total_borrowed ?? "-"}</p>
+            <p className="text-[12px] text-slate-400 mt-1">Digunakan oleh karyawan</p>
           </div>
         </div>
 
-        {/* Kategori */}
+        {/* Maintenance Aktif */}
         <div
-          onClick={() => navigate("/categories")}
-          className="group relative overflow-hidden bg-white rounded-xl shadow-sm border border-gray-100 border-t-4 border-t-cyan-500 p-5 cursor-pointer hover:shadow hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
+          onClick={() => navigate("/maintenance")}
+          className="group bg-white rounded-xl shadow-sm border border-slate-200/60 p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kategori</p>
-            <div className="w-9 h-9 rounded-lg bg-cyan-50 text-cyan-600 flex items-center justify-center transition-all duration-300 group-hover:bg-cyan-600 group-hover:text-white group-hover:-rotate-6">
-              <Tag className="w-4 h-4" />
+            <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider">Maintenance Aktif</p>
+            <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center transition-all duration-300 group-hover:bg-amber-600 group-hover:text-white group-hover:rotate-12">
+              <Wrench className="w-4 h-4" />
             </div>
           </div>
           <div>
-            <p className="text-3xl font-black text-cyan-600 tracking-tight">{stats?.total_categories ?? "-"}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Klasifikasi tipe aset</p>
+            <p className="text-3xl font-black text-amber-500 tracking-tight">{stats?.maintenance ?? "-"}</p>
+            <p className="text-[12px] text-slate-400 mt-1">Sedang dalam perawatan</p>
           </div>
         </div>
 
-      </div>
-
-      {/* PERSEBARAN ASSET PER DEPARTEMEN */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-2.5">
-            <TrendingUp className="w-4 h-4 text-brand-600" />
-            <h3 className="text-sm font-bold text-slate-700">Persebaran Asset per Departemen</h3>
+        {/* Tas Tenant */}
+        <div
+          onClick={() => navigate("/ploting-devices")}
+          className="group bg-white rounded-xl shadow-sm border border-slate-200/60 p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between min-h-[120px]"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider">Tas Tenant</p>
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110">
+              <Smartphone className="w-4 h-4" />
+            </div>
           </div>
-          
-          <select
-            value={filterDept}
-            onChange={(e) => setFilterDept(e.target.value as any)}
-            className="text-xs font-semibold text-slate-600 bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-[3px] focus:ring-brand-500/15 focus:border-brand-500 cursor-pointer transition-all"
-          >
-            <option value="all">Semua Asset</option>
-            <option value="active">Asset Aktif</option>
-            <option value="borrowed">Asset Dipinjam</option>
-            <option value="maintenance">Asset Maintenance</option>
-          </select>
-        </div>
-
-        {loadingAssignments || loadingKaryawan ? (
-          <div className="space-y-4.5">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-3 animate-pulse">
-                <div className="h-4 bg-slate-100 rounded w-24 sm:w-36" />
-                <div className="flex-1 bg-slate-100 rounded-full h-3" />
-                <div className="h-4 bg-slate-100 rounded w-10 hidden sm:block" />
-              </div>
-            ))}
-          </div>
-        ) : (
           <div>
-            {departmentDistribution.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Package className="w-9 h-9 text-slate-300 mb-2.5" />
-                <p className="text-slate-400 text-sm font-medium">Belum ada data persebaran asset.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {departmentDistribution.map((item, i) => {
-                  const maxCount = departmentDistribution[0]?.count || 1;
-                  const pct = (item.count / maxCount) * 100;
-                  const isTop = i === 0;
-
-                  return (
-                    <div key={item.department} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-3 border-b border-slate-100 last:border-0">
-                      <div className="flex items-center sm:w-48 shrink-0 gap-3">
-                        <div className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                          i === 0 ? "bg-amber-100 text-amber-800 border border-amber-200" :
-                          i === 1 ? "bg-slate-100 text-slate-700 border border-slate-200" :
-                          i === 2 ? "bg-orange-100 text-orange-800 border border-orange-200" :
-                          "bg-slate-50 text-slate-400 border border-slate-100"
-                        }`}>
-                          {i + 1}
-                        </div>
-                        
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-bold text-slate-800 truncate" title={item.department}>
-                             {item.department}
-                          </span>
-                          {item.categories && item.categories.length > 0 && (() => {
-                            const maxVisible = 2;
-                            const visible = item.categories.slice(0, maxVisible);
-                            const moreCount = item.categories.length - maxVisible;
-                            const displayText = visible.map((cat) => `${cat.categoryName} (${cat.count})`).join(" • ") + 
-                              (moreCount > 0 ? ` • +${moreCount} lainnya` : "");
-                            
-                            return (
-                              <div className="relative group/tooltip">
-                                <span className="text-[10px] text-gray-400 truncate mt-0.5 block cursor-help">
-                                  {displayText}
-                                </span>
-                                
-                                {/* Custom Premium Tooltip Popover */}
-                                <div className="absolute left-0 bottom-full pb-2 hidden group-hover:block z-30 min-w-[240px] max-w-[280px]">
-                                  <div className="bg-slate-900 text-white text-xs rounded-xl shadow-xl p-3.5 relative">
-                                    <div className="font-bold border-b border-slate-800 pb-1.5 mb-1.5 text-[11px] text-slate-400 flex justify-between items-center gap-2">
-                                      <span className="truncate">Detail Kategori Aset</span>
-                                      <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] text-slate-300 font-semibold shrink-0 max-w-[120px] truncate" title={item.department}>
-                                        {item.department}
-                                      </span>
-                                    </div>
-                                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
-                                      {item.categories.map((cat) => (
-                                        <div key={cat.categoryName} className="flex justify-between items-center gap-4">
-                                          <span className="text-slate-300 font-medium truncate">{cat.categoryName}</span>
-                                          <span className="font-bold bg-slate-800 text-brand-400 px-2 py-0.5 rounded-full text-[10px]">
-                                            {cat.count}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {/* Arrow */}
-                                    <div className="absolute left-6 top-full -translate-y-1 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-slate-900" />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      <div className="flex-1 bg-slate-50 rounded-full h-3 overflow-hidden flex items-center">
-                        <div
-                          className="h-full rounded-full transition-all duration-500 ease-out"
-                          style={{
-                            width: `${pct}%`,
-                            background: isTop
-                              ? "linear-gradient(90deg, #2BA56E 0%, #228A5A 100%)"
-                              : i === 1
-                              ? "linear-gradient(90deg, #3ecc8b 0%, #2ba56e 100%)"
-                              : i === 2
-                              ? "linear-gradient(90deg, #aff0d1 0%, #78e3b2 100%)"
-                              : "linear-gradient(90deg, #cbd5e1 0%, #cbd5e1 100%)",
-                          }}
-                        />
-                      </div>
-
-                      <span className="text-xs font-extrabold text-slate-700 w-16 text-right shrink-0 hidden sm:inline">
-                        {item.count} Asset
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <p className="text-3xl font-black text-slate-800 tracking-tight">{plotingDeviceStats?.total ?? "-"}</p>
+            <p className="text-[12px] text-slate-400 mt-1">Tas Tenant aktif terdaftar</p>
           </div>
-        )}
+        </div>
+
       </div>
 
-      {/* CHARTS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {/* SECTION 2 - ASSET OVERVIEW (CHARTS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Pie Chart — Kondisi Aset */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200/60 p-6 flex flex-col">
           <div className="flex items-center gap-2.5 mb-6">
-            <TrendingUp className="w-4 h-4 text-brand-600" />
-            <h3 className="text-sm font-bold text-slate-700">Distribusi Kondisi Aset</h3>
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-[18px] font-bold text-slate-800">Distribusi Kondisi Aset</h3>
           </div>
 
           {conditionChart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center py-10 text-center">
               <Package className="w-8 h-8 text-slate-300 mb-2" />
-              <p className="text-slate-400 text-xs font-medium">Belum ada data kondisi aset.</p>
+              <p className="text-slate-400 text-[12px] font-medium">Belum ada data kondisi aset.</p>
             </div>
           ) : (
-            <div className="flex flex-col sm:flex-row items-center gap-6 justify-center">
+            <div className="flex flex-col sm:flex-row items-center gap-6 justify-center my-auto">
               <div className="relative shrink-0 flex items-center justify-center">
                 <svg width="140" height="140" viewBox="0 0 140 140" className="drop-shadow-sm">
                   {(() => {
@@ -443,7 +333,7 @@ export default function Dashboard() {
                           key={i}
                           cx={cx} cy={cy} r={r}
                           fill="none"
-                          stroke={item.color}
+                          stroke={getConditionColor(item.label)}
                           strokeWidth="20"
                           strokeDasharray={`${dash} ${gap}`}
                           strokeDashoffset={0}
@@ -466,12 +356,12 @@ export default function Dashboard() {
                 {conditionChart.map((item, i) => (
                   <div key={i} className="flex items-center justify-between border-b border-slate-50 pb-2 last:border-0 last:pb-0">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="text-xs font-semibold text-slate-600">{item.label}</span>
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getConditionColor(item.label) }} />
+                      <span className="text-[14px] font-semibold text-slate-600">{item.label}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-800">{item.value}</span>
-                      <span className="text-[10px] font-bold text-slate-400">
+                      <span className="text-[14px] font-bold text-slate-800">{item.value}</span>
+                      <span className="text-[12px] font-bold text-slate-400">
                         ({Math.round((item.value / conditionTotal) * 100)}%)
                       </span>
                     </div>
@@ -483,31 +373,23 @@ export default function Dashboard() {
         </div>
 
         {/* Bar Chart — Aset per Kategori */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200/60 p-6 flex flex-col">
           <div className="flex items-center gap-2.5 mb-6">
-            <Tag className="w-4 h-4 text-brand-600" />
-            <h3 className="text-sm font-bold text-slate-700">Aset per Kategori</h3>
+            <Tag className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-[18px] font-bold text-slate-800">Aset per Kategori</h3>
           </div>
 
           {categoryChart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center py-10 text-center">
               <Tag className="w-8 h-8 text-slate-300 mb-2" />
-              <p className="text-slate-400 text-xs font-medium">Belum ada data kategori.</p>
+              <p className="text-slate-400 text-[12px] font-medium">Belum ada data kategori.</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 my-auto">
               {categoryChart.map((item, i) => (
                 <div key={i} className="flex items-center gap-3">
-                  <div className="flex items-center gap-2.5 w-32 shrink-0">
-                    <div className={`w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                      i === 0 ? "bg-brand-50 text-brand-600 border border-brand-100" :
-                      i === 1 ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
-                      i === 2 ? "bg-purple-50 text-purple-600 border border-purple-100" :
-                      "bg-slate-50 text-slate-400 border border-slate-100"
-                    }`}>
-                      {i + 1}
-                    </div>
-                    <span className="text-xs font-semibold text-slate-600 truncate">{item.label}</span>
+                  <div className="w-32 shrink-0">
+                    <span className="text-[14px] font-semibold text-slate-600 truncate">{item.label}</span>
                   </div>
 
                   <div className="flex-1 bg-slate-50 rounded-full h-2.5 overflow-hidden flex items-center">
@@ -519,13 +401,188 @@ export default function Dashboard() {
                       }}
                     />
                   </div>
-                  <span className="text-xs font-bold text-slate-700 w-8 text-right shrink-0">
+                  <span className="text-[14px] font-bold text-slate-700 w-8 text-right shrink-0">
                     {item.value}
                   </span>
                 </div>
               ))}
             </div>
           )}
+        </div>
+
+      </div>
+
+      {/* SECTION 3 & 4 GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* SECTION 3 - DISTRIBUSI DEPARTEMEN */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200/60 p-6 flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-2.5">
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+              <h3 className="text-[18px] font-bold text-slate-800">Persebaran Asset per Departemen</h3>
+            </div>
+            
+            <select
+              value={filterDept}
+              onChange={(e) => setFilterDept(e.target.value as any)}
+              className="text-[12px] font-semibold text-slate-600 bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/15 focus:border-emerald-500 cursor-pointer transition-all"
+            >
+              <option value="all">Semua Asset</option>
+              <option value="active">Asset Bagus</option>
+              <option value="borrowed">Asset Dipinjam</option>
+              <option value="maintenance">Asset Maintenance</option>
+            </select>
+          </div>
+
+          {loadingAssignments || loadingKaryawan ? (
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex flex-col gap-2 animate-pulse pb-3">
+                  <div className="flex justify-between">
+                    <div className="h-4 bg-slate-100 rounded w-36" />
+                    <div className="h-4 bg-slate-100 rounded w-12" />
+                  </div>
+                  <div className="bg-slate-100 rounded-full h-1.5 w-full" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col justify-center">
+              {departmentDistribution.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <Package className="w-9 h-9 text-slate-300 mb-2.5" />
+                  <p className="text-slate-400 text-[14px] font-medium">Belum ada data persebaran asset.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {departmentDistribution.map((item, i) => {
+                    const maxCount = departmentDistribution[0]?.count || 1;
+                    const pct = (item.count / maxCount) * 100;
+
+                    return (
+                      <div
+                        key={item.department}
+                        onClick={() => toggleDeptExpand(item.department)}
+                        className="group border border-slate-100 hover:border-slate-200/85 rounded-xl p-3 cursor-pointer transition-all duration-200 bg-white"
+                      >
+                        <div className="flex justify-between items-center text-[14px] mb-1.5">
+                          <span className="font-semibold text-slate-700 group-hover:text-emerald-700 transition-colors">
+                            {item.department}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[12px]">
+                              {item.count} Asset
+                            </span>
+                            <div className="text-slate-400 group-hover:text-slate-650 transition-colors">
+                              {expandedDepts.includes(item.department) ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500 ease-out"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: i === 0 ? "#059669" : i === 1 ? "#10b981" : i === 2 ? "#34d399" : "#cbd5e1"
+                            }}
+                          />
+                        </div>
+
+                        {/* Expandable Category details */}
+                        {expandedDepts.includes(item.department) && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-2"
+                          >
+                            {item.categories.slice(0, 5).map((cat) => (
+                              <div
+                                key={cat.categoryName}
+                                className="bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1 text-[12px] font-semibold text-slate-600 flex items-center gap-1.5"
+                              >
+                                <span>{cat.categoryName}</span>
+                                <span className="font-extrabold text-slate-700">({cat.count})</span>
+                              </div>
+                            ))}
+                            {item.categories.length > 5 && (
+                              <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg px-2.5 py-1 text-[12px] font-bold text-slate-400">
+                                +{item.categories.length - 5} categories more
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 4 - QUICK ACTIONS */}
+        <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-slate-200/60 p-6 flex flex-col">
+          <div className="flex items-center gap-2 mb-6">
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-[18px] font-bold text-slate-800">Quick Actions</h3>
+          </div>
+          <div className="flex-1 flex flex-col justify-center gap-3">
+            <button
+              onClick={() => navigate("/assets")}
+              className="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-200 text-slate-700 hover:text-emerald-700 rounded-xl text-[14px] font-semibold transition-all duration-200 group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-500 group-hover:text-emerald-600">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>Tambah Asset</span>
+              </div>
+              <span className="text-slate-400 group-hover:translate-x-0.5 transition-transform text-[14px]">→</span>
+            </button>
+
+            <button
+              onClick={() => navigate("/assignments")}
+              className="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-200 text-slate-700 hover:text-emerald-700 rounded-xl text-[14px] font-semibold transition-all duration-200 group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-500 group-hover:text-emerald-600">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <span>Buat Assignment</span>
+              </div>
+              <span className="text-slate-400 group-hover:translate-x-0.5 transition-transform text-[14px]">→</span>
+            </button>
+
+            <button
+              onClick={() => navigate("/maintenance")}
+              className="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-200 text-slate-700 hover:text-emerald-700 rounded-xl text-[14px] font-semibold transition-all duration-200 group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-500 group-hover:text-emerald-600">
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <span>Buat Maintenance</span>
+              </div>
+              <span className="text-slate-400 group-hover:translate-x-0.5 transition-transform text-[14px]">→</span>
+            </button>
+
+            <button
+              onClick={() => navigate("/ploting-devices")}
+              className="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-200 text-slate-700 hover:text-emerald-700 rounded-xl text-[14px] font-semibold transition-all duration-200 group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-500 group-hover:text-emerald-600">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <span>Kelola Tas Tenant</span>
+              </div>
+              <span className="text-slate-400 group-hover:translate-x-0.5 transition-transform text-[14px]">→</span>
+            </button>
+          </div>
         </div>
 
       </div>

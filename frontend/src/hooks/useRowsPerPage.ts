@@ -14,8 +14,10 @@ const normalizeRowsPerPage = (value: unknown) => {
   return Math.min(Math.trunc(nextValue), MAX_ROWS_PER_PAGE);
 };
 
-export function useRowsPerPage() {
-  const [rowsPerPage, setRowsPerPageState] = useState(DEFAULT_ROWS_PER_PAGE);
+export function useRowsPerPage(initialValue?: number) {
+  const [rowsPerPage, setRowsPerPageState] = useState(() =>
+    normalizeRowsPerPage(initialValue ?? DEFAULT_ROWS_PER_PAGE)
+  );
 
   const setRowsPerPage = useCallback((value: unknown) => {
     const nextValue = normalizeRowsPerPage(value);

@@ -27,9 +27,20 @@ export interface Assignment {
   asset: Asset | null;
 }
 
+export interface DepartmentAssetDetail {
+  id: number;
+  asset_code: string;
+  asset_name: string;
+  condition_status: "good" | "damaged" | "under_maintenance" | "retired";
+  status: "active" | "borrowed" | "disposed";
+  user_name: string;
+  phone?: string;
+}
+
 export interface DepartmentCategoryBreakdown {
   categoryName: string;
   count: number;
+  assets: DepartmentAssetDetail[];
 }
 
 export interface DepartmentDistribution {
@@ -92,7 +103,7 @@ export function getAssetDistributionByDepartment(
     if (emp.username) employeeMap.set(emp.username.toLowerCase(), emp.departemen);
   });
 
-  const departmentCounts: Record<string, { count: number; categories: Record<string, number> }> = {};
+  const departmentCounts: Record<string, { count: number; categories: Record<string, { count: number; assets: DepartmentAssetDetail[] }> }> = {};
 
   assignments.forEach((assign) => {
     const asset = assign.asset;
@@ -131,14 +142,30 @@ export function getAssetDistributionByDepartment(
       }
     }
 
-    departmentCounts[dept].categories[catName] = (departmentCounts[dept].categories[catName] || 0) + 1;
+    if (!departmentCounts[dept].categories[catName]) {
+      departmentCounts[dept].categories[catName] = { count: 0, assets: [] };
+    }
+    departmentCounts[dept].categories[catName].count += 1;
+    departmentCounts[dept].categories[catName].assets.push({
+      id: asset.id,
+      asset_code: asset.asset_code,
+      asset_name: asset.asset_name,
+      condition_status: asset.condition_status,
+      status: asset.status,
+      user_name: assign.user_name,
+      phone: assign.phone,
+    });
   });
 
   // Convert to array and sort descending by count
   return Object.entries(departmentCounts)
     .map(([department, data]) => {
       const categoriesBreakdown = Object.entries(data.categories)
-        .map(([categoryName, count]) => ({ categoryName, count }))
+        .map(([categoryName, catData]) => ({
+          categoryName,
+          count: catData.count,
+          assets: catData.assets,
+        }))
         .sort((a, b) => b.count - a.count);
       return {
         department,

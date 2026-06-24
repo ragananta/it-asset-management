@@ -58,9 +58,7 @@ class AuthController extends Controller
             return $this->errorResponse('Email atau password salah', 401);
         }
 
-        // Hapus token lama (1 device 1 token)
-        $user->tokens()->delete();
-
+        // Generate token baru tanpa menghapus token aktif lain
         $token = $user->createToken('it-asset-token')->plainTextToken;
 
         // ✅ LOG LOGIN — pakai tabel logs

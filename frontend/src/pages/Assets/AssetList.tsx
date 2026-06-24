@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import api from "../../api/axios";
-import { Search, Filter, X, Trash2, Download } from "lucide-react";
+import axios from "axios";
+import { Search, Filter, X, Trash2, Download, ChevronUp, ChevronDown } from "lucide-react";
 import AssetModal from "../../components/AssetModal";
 import TablePagination from "../../components/pagination/TablePagination";
+import { usePolling } from "@/hooks/usePolling";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
 interface Category { id: number; name: string; code: string; }
@@ -25,6 +27,7 @@ interface Asset {
   category?: { id: number; name: string };
   assigned_user?: { id: number; name: string };
   deleted_at?: string | null;
+  current_holder?: string | null;
 }
 
 interface Filters {
@@ -43,27 +46,52 @@ const statusLabel: Record<string, string> = { active: "Aktif", borrowed: "Dipinj
 const statusColor: Record<string, string> = {
   active: "text-teal-700 bg-teal-50",
   borrowed: "text-blue-600 bg-blue-50",
-  disposed: "text-gray-500 bg-gray-100",
+  disposed: "text-gray-550 bg-gray-100",
 };
 
 export default function AssetList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<Filters>({ category: "", condition: "", status: "" });
+  const [filters, setFilters] = useState<Filters>({
+    category: searchParams.get("category") || "",
+    condition: searchParams.get("condition") || "",
+    status: searchParams.get("status") || ""
+  });
   const filterRef = useRef<HTMLDivElement>(null);
 
-  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
-  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(searchParams.get("page") || "1", 10);
+  });
+
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "created_at");
+  const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "desc");
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (currentPage > 1) params.page = String(currentPage);
+    if (search) params.search = search;
+    if (filters.category) params.category = filters.category;
+    if (filters.condition) params.condition = filters.condition;
+    if (filters.status) params.status = filters.status;
+    if (sortBy && sortBy !== "created_at") params.sort = sortBy;
+    if (sortOrder && sortOrder !== "desc") params.order = sortOrder;
+    setSearchParams(params, { replace: true });
+  }, [currentPage, search, filters, rowsPerPage, sortBy, sortOrder, setSearchParams]);
+
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -74,6 +102,23 @@ export default function AssetList() {
   const [deleting, setDeleting] = useState(false);
 
   const [refetchFlag, setRefetchFlag] = useState(0);
+  const [toast, setToast] = useState("");
+
+  const isSilentRef = useRef(false);
+  const isFetchingRef = useRef(false);
+
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    setRefetchFlag((f) => f + 1);
+  };
+
+  usePolling(triggerSilentRefresh, 60000, !modalOpen && !deleteTarget);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const categoriesFetched = useRef(false);
   useEffect(() => {
@@ -105,11 +150,15 @@ export default function AssetList() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     const fetchAssets = async () => {
+      if (isFetchingRef.current) return;
       try {
-        setLoading(true);
+        isFetchingRef.current = true;
+        if (!isSilentRef.current) {
+          setLoading(true);
+        }
         const params = new URLSearchParams({
           page: String(currentPage),
           per_page: String(rowsPerPage),
@@ -119,9 +168,12 @@ export default function AssetList() {
         if (filters.category) params.append("category_id", filters.category);
         if (filters.condition) params.append("condition_status", filters.condition);
         if (filters.status) params.append("status", filters.status);
+        if (sortBy) params.append("sort_by", sortBy);
+        if (sortOrder) params.append("sort_order", sortOrder);
 
-        const res = await api.get(`/assets?${params}`);
-        if (cancelled) return;
+        const res = await api.get(`/assets?${params}`, {
+          signal: controller.signal
+        });
 
         const payload = res?.data?.data;
         if (payload?.data) {
@@ -136,18 +188,40 @@ export default function AssetList() {
           setTotalPages(1);
         }
       } catch (err) {
-        if (!cancelled) console.error("ERROR fetch assets:", err);
+        if (!axios.isCancel(err)) {
+          console.error("ERROR fetch assets:", err);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        isFetchingRef.current = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          if (!isSilentRef.current) {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+          isSilentRef.current = false;
+        }
       }
     };
 
     fetchAssets();
-    return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search, filters, refetchFlag]);
+    return () => {
+      controller.abort();
+      isFetchingRef.current = false;
+    };
+  }, [currentPage, rowsPerPage, search, filters, sortBy, sortOrder, refetchFlag]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
   const activeFilterCount = [filters.category, filters.condition, filters.status].filter(Boolean).length;
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+    setCurrentPage(1);
+  };
 
   const resetFilters = () => {
     setFilters({ category: "", condition: "", status: "" });
@@ -160,21 +234,18 @@ export default function AssetList() {
   const closeModal = () => { setModalOpen(false); setEditAsset(null); };
 
   const handleSuccess = useCallback((updatedAsset?: Asset) => {
+    setRefetchFlag((f) => f + 1);
     if (updatedAsset) {
-      setAssets((prev) =>
-        prev.map((item) =>
-          item.id === updatedAsset.id ? { ...item, ...updatedAsset } : item
-        )
-      );
+      setToast("Aset berhasil diperbarui");
     } else {
       setCurrentPage(1);
       setSearch("");
       setSearchInput("");
-      setRefetchFlag((f) => f + 1);
+      setToast("Aset berhasil ditambahkan");
     }
-    setModalOpen(false); // ← langsung set state, tidak panggil closeModal
+    setModalOpen(false);
     setEditAsset(null);
-  }, []); // ← dependency array kosong, stabil
+  }, []);
 
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = async () => {
@@ -221,6 +292,7 @@ export default function AssetList() {
 
       await api.delete(`/assets/${deleteTarget.id}`);
       setDeleteTarget(null);
+      setToast("Aset berhasil dihapus");
 
     } catch (err) {
       console.error("ERROR delete asset:", err);
@@ -233,6 +305,15 @@ export default function AssetList() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* Toast Alert */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} className="text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* SEARCH + ACTION */}
       <div className="flex justify-end items-center gap-3 mb-5">
@@ -390,19 +471,60 @@ export default function AssetList() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12 whitespace-nowrap">NO</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-36 whitespace-nowrap">Kode</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase min-w-[180px]">Nama Asset</th>
+              <th 
+                onClick={() => handleSort("asset_code")} 
+                className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-36 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center gap-1">
+                  Kode
+                  {sortBy === "asset_code" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort("asset_name")} 
+                className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase min-w-[180px] cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center gap-1">
+                  Nama Asset
+                  {sortBy === "asset_name" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap">Kategori</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap">Kondisi</th>
-              <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap">Status</th>
+              <th 
+                onClick={() => handleSort("condition_status")} 
+                className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Kondisi
+                  {sortBy === "condition_status" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort("status")} 
+                className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-40 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Status
+                  {sortBy === "status" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-48 whitespace-nowrap">Current Holder</th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-52 whitespace-nowrap">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={7} className="py-16 text-center text-gray-400">Loading...</td></tr>
+              <tr><td colSpan={8} className="py-16 text-center text-gray-400">Loading...</td></tr>
             ) : assets.length === 0 ? (
-              <tr><td colSpan={7} className="py-16 text-center text-gray-300">
+              <tr><td colSpan={8} className="py-16 text-center text-gray-300">
                 {search || activeFilterCount > 0 ? "Tidak ada aset yang cocok" : "Data asset belum tersedia"}
               </td></tr>
             ) : (
@@ -410,7 +532,7 @@ export default function AssetList() {
                 <tr
                   key={a.id}
                   className="hover:bg-brand-50/15 transition cursor-pointer"
-                  onClick={() => navigate(`/assets/${a.id}`)}
+                  onClick={() => navigate(`/assets/${a.id}${location.search}`)}
                 >
                   <td className="px-5 py-4 text-gray-400 text-xs">{startIndex + idx + 1}</td>
                   <td className="px-5 py-4 font-mono text-xs text-gray-700">{a.asset_code || "-"}</td>
@@ -430,10 +552,13 @@ export default function AssetList() {
                       {statusLabel[a.status || ""] || a.status || "-"}
                     </span>
                   </td>
+                  <td className="px-5 py-4 text-left text-gray-700 font-medium whitespace-nowrap">
+                    {a.current_holder || "-"}
+                  </td>
                   <td className="px-5 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center gap-2">
                       <button
-                        onClick={() => navigate(`/assets/${a.id}`)}
+                        onClick={() => navigate(`/assets/${a.id}${location.search}`)}
                         className="text-blue-600 text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-full transition"
                       >Detail</button>
                       <button

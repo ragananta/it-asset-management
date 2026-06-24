@@ -6,14 +6,20 @@ use App\Models\AssetAssignment;
 use App\Models\MasterAsset;
 use App\Traits\ApiResponse;
 use App\Exports\AssetByEmployeeExport;
+use App\Services\KaryawanService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
     use ApiResponse;
+
+    protected KaryawanService $karyawanService;
+
+    public function __construct(KaryawanService $karyawanService)
+    {
+        $this->karyawanService = $karyawanService;
+    }
 
     /**
      * Menampilkan data aset yang dikelompokkan per karyawan.
@@ -70,10 +76,7 @@ class ReportController extends Controller
 
             // Filter berdasarkan department (cross-reference dengan API karyawan)
             if ($request->filled('department')) {
-                $karyawanList = Cache::remember('karyawan_list', 300, function () {
-                    $response = Http::get('https://dummydatakaryawan.salokapark.app/api/get_all_karyawan');
-                    return $response->json('karyawanActive') ?? [];
-                });
+                $karyawanList = $this->karyawanService->getAllActiveKaryawan();
 
                 $department = $request->department;
 

@@ -55,6 +55,12 @@ class DatabaseSeeder extends Seeder
         $catServer  = Category::create(['name' => 'Server',    'code' => 'CAT-SRV', 'description' => 'Server dan perangkat komputasi berat']);
         $catMonitor = Category::create(['name' => 'Monitor',   'code' => 'CAT-MON', 'description' => 'Monitor dan display']);
 
+        // Tas Category
+        Category::firstOrCreate(
+            ['code' => 'CAT-TAS'],
+            ['name' => 'Tas', 'description' => 'Kategori wadah/tas penyimpanan perangkat']
+        );
+
         // ─── Locations ────────────────────────────────────────────
         $loc1 = Location::create(['name' => 'Kantor Pusat - Lantai 1', 'code' => 'LOC-HO-L1', 'building' => 'Gedung HO', 'floor' => '1', 'room' => 'R101']);
         $loc2 = Location::create(['name' => 'Kantor Pusat - Lantai 2', 'code' => 'LOC-HO-L2', 'building' => 'Gedung HO', 'floor' => '2', 'room' => 'R201']);
@@ -154,6 +160,7 @@ class DatabaseSeeder extends Seeder
             'description' => 'Pembersihan debu internal, penggantian thermal paste',
             'cost'        => 150000,
             'pic'         => 'Agus Teknisi',
+            'status'      => 'completed',
         ]);
 
         MaintenanceLog::create([
@@ -162,6 +169,7 @@ class DatabaseSeeder extends Seeder
             'description' => 'Penggantian drum unit printer karena hasil cetak bergaris',
             'cost'        => 850000,
             'pic'         => 'Bimo Teknisi',
+            'status'      => 'completed',
         ]);
 
         MaintenanceLog::create([
@@ -170,6 +178,7 @@ class DatabaseSeeder extends Seeder
             'description' => 'Firmware update dari versi 12.2(55)SE10 ke 12.2(55)SE12',
             'cost'        => 0,
             'pic'         => 'Admin IT',
+            'status'      => 'completed',
         ]);
 
         MaintenanceLog::create([
@@ -178,6 +187,7 @@ class DatabaseSeeder extends Seeder
             'description' => 'Upgrade RAM dari 8GB ke 16GB',
             'cost'        => 750000,
             'pic'         => 'Agus Teknisi',
+            'status'      => 'completed',
         ]);
 
         // ─── Audit Logs ─────────────────────────────────────────────
@@ -210,6 +220,7 @@ class DatabaseSeeder extends Seeder
             'return_date' => null,
             'note'        => 'Penugasan permanen untuk staff IT',
         ]);
+        $asset1->update(['status' => 'borrowed']);
 
         AssetAssignment::create([
             'asset_id'    => $asset4->id,
@@ -218,6 +229,7 @@ class DatabaseSeeder extends Seeder
             'return_date' => null,
             'note'        => 'Penugasan untuk staff Finance',
         ]);
+        $asset4->update(['status' => 'borrowed']);
 
         AssetAssignment::create([
             'asset_id'    => $asset2->id,
@@ -226,6 +238,8 @@ class DatabaseSeeder extends Seeder
             'return_date' => null,
             'note'        => 'Printer shared untuk lantai 1',
         ]);
+        $asset2->update(['status' => 'borrowed']);
+
 
         $this->command->info('✅ Database seeder berhasil dijalankan!');
         $this->command->info('👤 Admin: admin@itasset.com / password');

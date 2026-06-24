@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
-import { Search, Plus, Pencil, Trash2, X, Check, Tag, Save } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, Tag, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { usePolling } from "../../hooks/usePolling";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
@@ -31,14 +32,31 @@ const normalizeCode = (value: string) => squish(value).toUpperCase();
 const comparable = (value: string) => squish(value).toLowerCase();
 
 export default function CategoryList() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
-  const [currentPage, setCurrentPage] = useState(1);
+  const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(searchParams.get("page") || "1", 10);
+  });
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "name");
+  const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "asc");
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (currentPage > 1) params.page = String(currentPage);
+    if (search) params.search = search;
+    if (sortBy && sortBy !== "name") params.sort = sortBy;
+    if (sortOrder && sortOrder !== "asc") params.order = sortOrder;
+    setSearchParams(params, { replace: true });
+  }, [currentPage, search, rowsPerPage, sortBy, sortOrder, setSearchParams]);
+
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -51,13 +69,23 @@ export default function CategoryList() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
-
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
-  const triggerRefresh = () => setRefreshKey((k) => k + 1);
+  const isSilentRef = useRef(false);
+  const isFetchingRef = useRef(false);
 
-  // ── Auto refresh setiap 30 detik ──────────────────────────────────────────
-  usePolling(triggerRefresh, 30000, !modalOpen && !deleteTarget);
+  const triggerRefresh = () => {
+    isSilentRef.current = false;
+    setRefreshKey((k) => k + 1);
+  };
+
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    setRefreshKey((k) => k + 1);
+  };
+
+  // ── Auto refresh setiap 120 detik ─────────────────────────────────────────
+  usePolling(triggerSilentRefresh, 120000, !modalOpen && !deleteTarget);
 
   // ── Debounce search ───────────────────────────────────────────────────────
   const handleSearchInput = (val: string) => {
@@ -69,22 +97,37 @@ export default function CategoryList() {
     }, 400);
   };
 
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+    setCurrentPage(1);
+  };
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     const fetchData = async () => {
+      if (isFetchingRef.current) return;
       try {
-        setLoading(true);
+        isFetchingRef.current = true;
+        if (!isSilentRef.current) {
+          setLoading(true);
+        }
         const params = new URLSearchParams({
           page: String(currentPage),
           per_page: String(rowsPerPage),
           simple: "1",
         });
         if (search) params.append("search", search);
+        if (sortBy) params.append("sort_by", sortBy);
+        if (sortOrder) params.append("sort_order", sortOrder);
 
-        const res = await api.get(`/categories?${params}`);
-        if (cancelled) return;
+        const res = await api.get(`/categories?${params}`, { signal: controller.signal });
 
         const payload = res?.data?.data;
         if (payload?.data) {
@@ -98,16 +141,28 @@ export default function CategoryList() {
           setTotalData(data.length);
           setTotalPages(1);
         }
-      } catch (err) {
-        if (!cancelled) console.error("ERROR fetch categories:", err);
+      } catch (err: any) {
+        if (err.name !== "CanceledError") {
+          console.error("ERROR fetch categories:", err);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        isFetchingRef.current = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          if (!isSilentRef.current) {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+          isSilentRef.current = false;
+        }
       }
     };
 
     fetchData();
-    return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search, refreshKey]);
+    return () => {
+      controller.abort();
+      isFetchingRef.current = false;
+    };
+  }, [currentPage, rowsPerPage, search, sortBy, sortOrder, refreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
   const duplicateSource = allCategories.length > 0 ? allCategories : categories;
@@ -188,9 +243,10 @@ export default function CategoryList() {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
+    const normalizedName = form.name.trim();
     const normalizedForm = {
       ...form,
-      name: normalizeName(form.name),
+      name: normalizedName,
       code: normalizeCode(form.code),
       description: form.description.trim(),
     };
@@ -211,41 +267,41 @@ export default function CategoryList() {
       setErrors({});
 
       if (editTarget) {
+        await api.put(`/categories/${editTarget.id}`, normalizedForm);
         const optimistic: Category = { ...editTarget, ...normalizedForm };
         setCategories((prev) =>
           prev.map((item) => (item.id === editTarget.id ? { ...item, ...optimistic } : item))
         );
-        closeModal(); // tutup modal langsung
-
-        api.put(`/categories/${editTarget.id}`, normalizedForm).catch((err) => {
-          triggerRefresh(); // rollback dengan refetch
-          const message = err?.response?.data?.errors?.name?.[0]
-            || err?.response?.data?.errors?.code?.[0]
-            || err?.response?.data?.message
-            || "Gagal menyimpan perubahan";
-          setToast(message);
-        });
-
+        closeModal();
+        setToast("Kategori berhasil diperbarui");
+        triggerRefresh();
       } else {
-        closeModal(); // tutup modal langsung
-
-        api.post("/categories", normalizedForm)
-          .then(() => { setCurrentPage(1); triggerRefresh(); })
-          .catch((err) => {
-            const message = err?.response?.data?.errors?.name?.[0]
-              || err?.response?.data?.errors?.code?.[0]
-              || err?.response?.data?.message
-              || "Gagal menyimpan kategori";
-            setToast(message);
-          });
+        await api.post("/categories", normalizedForm);
+        closeModal();
+        setCurrentPage(1);
+        triggerRefresh();
+        setToast("Kategori berhasil ditambahkan");
       }
     } catch (err: any) {
-      if (err?.response?.data?.errors) {
+      console.error("ERROR saving category:", err);
+      const apiMessage = err?.response?.data?.message;
+      if (apiMessage === "Nama kategori sudah digunakan.") {
+        setErrors((prev) => ({ ...prev, name: "Nama kategori sudah digunakan." }));
+        setToast("Nama kategori sudah digunakan.");
+      } else if (err?.response?.data?.errors?.name?.[0]) {
+        const nameErr = err.response.data.errors.name[0];
+        setErrors((prev) => ({ ...prev, name: nameErr }));
+        setToast(nameErr);
+      } else if (err?.response?.data?.errors) {
         const apiErrors: Record<string, string> = {};
         Object.entries(err.response.data.errors).forEach(([key, val]) => {
           apiErrors[key] = Array.isArray(val) ? (val as string[])[0] : String(val);
         });
         setErrors(apiErrors);
+        const firstError = apiErrors.name || apiErrors.code || "Gagal menyimpan kategori";
+        setToast(firstError);
+      } else {
+        setToast(apiMessage || "Gagal menyimpan kategori");
       }
     }
   };
@@ -267,6 +323,7 @@ export default function CategoryList() {
 
       await api.delete(`/categories/${deleteTarget.id}`);
       setDeleteTarget(null);
+      setToast("Kategori berhasil dihapus");
     } catch (err: any) {
       console.error("ERROR delete category:", err);
       setCategories(prevCategories);
@@ -322,8 +379,28 @@ export default function CategoryList() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12">NO</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[120px]">Kode</th>
-              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[220px]">Nama Kategori</th>
+              <th 
+                onClick={() => handleSort("code")}
+                className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[120px] cursor-pointer hover:bg-gray-100 hover:text-gray-700 transition"
+              >
+                <div className="flex items-center gap-1">
+                  <span>Kode</span>
+                  {sortBy === "code" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort("name")}
+                className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-[220px] cursor-pointer hover:bg-gray-100 hover:text-gray-700 transition"
+              >
+                <div className="flex items-center gap-1">
+                  <span>Nama Kategori</span>
+                  {sortBy === "name" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Deskripsi</th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[120px]">Status</th>
               <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-[180px]">Aksi</th>
@@ -439,7 +516,7 @@ export default function CategoryList() {
                       placeholder="contoh: Laptop"
                       value={form.name}
                       onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((prev) => ({ ...prev, name: "" })); }}
-                      onBlur={() => setForm((prev) => ({ ...prev, name: normalizeName(prev.name) }))}
+                      onBlur={() => setForm((prev) => ({ ...prev, name: prev.name.trim() }))}
                     />
                     {nameError && <p className="text-red-500 text-xs mt-1">{nameError}</p>}
                   </div>
@@ -531,7 +608,7 @@ export default function CategoryList() {
               >Batal</button>
               <button
                 onClick={handleDelete}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-655 hover:bg-red-705 rounded-lg transition"
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition"
               >Hapus</button>
             </div>
           </div>

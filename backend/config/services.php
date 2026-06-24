@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'karyawan' => [
+        'url' => env('KARYAWAN_API_URL'),
+    ],
+
+    'store' => [
+        'url' => env('STORE_API_URL'),
+    ],
+
 ];

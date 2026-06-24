@@ -33,6 +33,31 @@ class MasterAssetController extends Controller
         }
     }
 
+    public function lookup($assetCode)
+    {
+        try {
+            $asset = MasterAsset::where('asset_code', $assetCode)
+                ->with('category:id,code')
+                ->first();
+
+            if (!$asset) {
+                return $this->notFoundResponse('Aset tidak ditemukan');
+            }
+
+            $isPackage = ($asset->category && $asset->category->code === 'CAT-TAS');
+            $redirectUrl = $isPackage ? "/ploting-devices/{$asset->id}" : "/assets/{$asset->id}";
+
+            return $this->successResponse([
+                'id'           => $asset->id,
+                'asset_code'   => $asset->asset_code,
+                'asset_type'   => $isPackage ? 'package' : 'individual',
+                'redirect_url' => $redirectUrl,
+            ], 'Aset berhasil di-lookup');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
+        }
+    }
+
     public function index(Request $request)
     {
         try {
@@ -70,6 +95,9 @@ class MasterAssetController extends Controller
 
                 $query = MasterAsset::with([
                     'category:id,name',
+                    'containerAsset.containerAsset:id,asset_code,asset_name',
+                    'activeAssignment:id,asset_id,user_name',
+                    'storeAssetMapping:id,asset_id,store_code,store_name',
                 ])->select([
                     'id',
                     'asset_code',
@@ -120,11 +148,45 @@ class MasterAssetController extends Controller
                     $query->orderBy('created_at', 'desc');
                 }
 
-                $perPage = min($request->integer('per_page', 10), 100);
+                $perPage = min($request->integer('per_page', 10), 1000);
 
-                return $request->boolean('simple')
+                $paginated = $request->boolean('simple')
                     ? $query->simplePaginate($perPage)
                     : $query->paginate($perPage);
+
+                $paginated->through(function ($asset) {
+                    $containerAsset = $asset->containerAsset;
+                    if ($containerAsset && $containerAsset->containerAsset) {
+                        $parent = $containerAsset->containerAsset;
+                        $asset->setAttribute('parent_package', [
+                            'asset_code' => $parent->asset_code,
+                            'asset_name' => $parent->asset_name,
+                        ]);
+                    } else {
+                        $asset->setAttribute('parent_package', null);
+                    }
+
+                    $active = $asset->activeAssignment;
+                    $assignedTo = $active ? $active->user_name : null;
+
+                    $asset->setAttribute('assigned_to', $assignedTo);
+                    $asset->setAttribute('assignment_source', 'direct');
+                    $asset->setAttribute('current_holder', $assignedTo);
+
+                    $mapping = $asset->storeAssetMapping;
+                    if ($mapping) {
+                        $asset->setAttribute('store_package', [
+                            'store_code' => $mapping->store_code,
+                            'store_name' => $mapping->store_name,
+                        ]);
+                    } else {
+                        $asset->setAttribute('store_package', null);
+                    }
+
+                    return $asset;
+                });
+
+                return $paginated;
             });
 
             return $this->successResponse($data, 'Data aset berhasil diambil');
@@ -145,11 +207,31 @@ class MasterAssetController extends Controller
                 'maintenanceLogs' => fn($q) => $q->orderByDesc('date')->limit(10),
                 'auditLogs'       => fn($q) => $q->orderByDesc('created_at')->limit(20),
                 'assignments'     => fn($q) => $q->orderByDesc('assign_date')->limit(10),
+                'containerAsset.containerAsset.activeAssignment',
+                'activeAssignment',
             ])->find($id);
 
             if (!$asset) {
                 return $this->notFoundResponse('Aset tidak ditemukan');
             }
+
+            $containerAsset = $asset->containerAsset;
+            if ($containerAsset && $containerAsset->containerAsset) {
+                $parent = $containerAsset->containerAsset;
+                $asset->setAttribute('parent_package', [
+                    'asset_code' => $parent->asset_code,
+                    'asset_name' => $parent->asset_name,
+                ]);
+            } else {
+                $asset->setAttribute('parent_package', null);
+            }
+
+            $active = $asset->activeAssignment;
+            $assignedTo = $active ? $active->user_name : null;
+
+            $asset->setAttribute('assigned_to', $assignedTo);
+            $asset->setAttribute('assignment_source', 'direct');
+            $asset->setAttribute('current_holder', $assignedTo);
 
             return $this->successResponse($asset, 'Detail aset berhasil diambil');
 

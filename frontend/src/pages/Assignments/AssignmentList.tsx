@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
+import axios from "axios";
 import { useAssets } from "../../context/AssetsContext";
 import { useKaryawan } from "../../context/KaryawanContext";
 import { usePolling } from "../../hooks/usePolling";
-import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download, Save } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download, Save, ChevronUp, ChevronDown } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
@@ -48,15 +50,35 @@ export default function AssignmentList() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get("status") || "");
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(searchParams.get("page") || "1", 10);
+  });
+
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "created_at");
+  const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "desc");
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (currentPage > 1) params.page = String(currentPage);
+    if (search) params.search = search;
+    if (filterStatus) params.status = filterStatus;
+    if (sortBy && sortBy !== "created_at") params.sort = sortBy;
+    if (sortOrder && sortOrder !== "desc") params.order = sortOrder;
+    setSearchParams(params, { replace: true });
+  }, [currentPage, search, filterStatus, rowsPerPage, sortBy, sortOrder, setSearchParams]);
+
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFetchingRef = useRef(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalClosing, setModalClosing] = useState(false);
@@ -121,16 +143,23 @@ export default function AssignmentList() {
   }, [modalOpen]);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+
     const fetchData = async () => {
+      if (isFetchingRef.current) return;
       try {
+        isFetchingRef.current = true;
         setLoading(true);
         const params = new URLSearchParams({ page: String(currentPage), per_page: String(rowsPerPage) });
         if (search) params.append("search", search);
         if (filterStatus === "active") params.append("is_active", "1");
         if (filterStatus === "returned") params.append("is_active", "0");
-        const res = await api.get(`/asset-assignments?${params}`);
-        if (cancelled) return;
+        if (sortBy) params.append("sort_by", sortBy);
+        if (sortOrder) params.append("sort_order", sortOrder);
+
+        const res = await api.get(`/asset-assignments?${params}`, {
+          signal: controller.signal
+        });
         const payload = res?.data?.data;
         if (payload?.data) {
           setAssignments(payload.data); setTotalData(payload.total); setTotalPages(payload.last_page);
@@ -139,17 +168,37 @@ export default function AssignmentList() {
           setAssignments(data); setTotalData(data.length); setTotalPages(1);
         }
       } catch (err) {
-        if (!cancelled) console.error("ERROR fetch assignments:", err);
+        if (!axios.isCancel(err)) {
+          console.error("ERROR fetch assignments:", err);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        isFetchingRef.current = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
     };
     fetchData();
-    return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search, filterStatus, refreshKey]);
+    return () => {
+      controller.abort();
+      isFetchingRef.current = false;
+    };
+  }, [currentPage, rowsPerPage, search, filterStatus, sortBy, sortOrder, refreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
   const isActive = (item: Assignment) => !item.return_date;
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+    setCurrentPage(1);
+  };
+
   const dipinjamCount = assignments.filter(isActive).length;
 
   const handleExport = async () => {
@@ -340,15 +389,55 @@ export default function AssignmentList() {
           <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[4%]">No</th>
-                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[18%]">Aset</th>
-                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[19%]">Dipinjam Oleh</th>
-                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[12%]">No. WA</th>
-                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[8.5%]">Tgl Pinjam</th>
-                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[8.5%]">Tgl Kembali</th>
-                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[9.5%]">Status</th>
-                <th className="px-3 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[7.5%]">Catatan</th>
-                <th className="px-3 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[13%]">Aksi</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[4%]">No</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[22%]">Aset</th>
+                <th 
+                  onClick={() => handleSort("user_name")} 
+                  className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[15%] cursor-pointer hover:bg-gray-100 transition select-none"
+                >
+                  <div className="flex items-center gap-1">
+                    Dipinjam Oleh
+                    {sortBy === "user_name" && (
+                      sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort("phone")} 
+                  className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[10%] cursor-pointer hover:bg-gray-100 transition select-none"
+                >
+                  <div className="flex items-center gap-1">
+                    No. WA
+                    {sortBy === "phone" && (
+                      sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort("assign_date")} 
+                  className="px-5 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[9%] cursor-pointer hover:bg-gray-100 transition select-none"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Tgl Pinjam
+                    {sortBy === "assign_date" && (
+                      sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort("return_date")} 
+                  className="px-5 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[9%] cursor-pointer hover:bg-gray-100 transition select-none"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Tgl Kembali
+                    {sortBy === "return_date" && (
+                      sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                    )}
+                  </div>
+                </th>
+                <th className="px-5 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[10%]">Status</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[10%]">Catatan</th>
+                <th className="px-5 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-[11%]">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -361,8 +450,8 @@ export default function AssignmentList() {
               ) : (
                 assignments.map((item, idx) => (
                   <tr key={item.id} className={`hover:bg-blue-50/20 transition ${!isActive(item) ? "opacity-60" : ""}`}>
-                    <td className="px-3 py-4 text-gray-400 text-xs align-middle">{startIndex + idx + 1}</td>
-                    <td className="px-3 py-4 align-middle">
+                    <td className="px-5 py-4 text-gray-400 text-xs align-middle">{startIndex + idx + 1}</td>
+                    <td className="px-5 py-4 align-middle">
                       {item.asset ? (
                         <div className="min-w-0">
                           <p className="font-medium text-gray-800 text-sm leading-tight truncate">{item.asset.asset_name}</p>
@@ -370,7 +459,7 @@ export default function AssignmentList() {
                         </div>
                       ) : <span className="text-gray-400 text-xs">-</span>}
                     </td>
-                    <td className="px-3 py-4 align-middle">
+                    <td className="px-5 py-4 align-middle">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-semibold uppercase shrink-0">
                           {(item.user_name || "?").charAt(0)}
@@ -378,7 +467,7 @@ export default function AssignmentList() {
                         <span className="text-gray-700 text-sm truncate min-w-0">{item.user_name || "-"}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-4 align-middle">
+                    <td className="px-5 py-4 align-middle">
                       {item.phone ? (
                         <a
                           href={`https://wa.me/${item.phone}`}
@@ -396,20 +485,20 @@ export default function AssignmentList() {
                         <span className="text-gray-700 text-sm truncate block max-w-[120px]">-</span>
                       )}
                     </td>
-                    <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.assign_date)}</td>
-                    <td className="px-3 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.return_date)}</td>
-                    <td className="px-3 py-4 text-center align-middle">
-                      <span className={`inline-flex items-center justify-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap w-28 ${
+                    <td className="px-5 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.assign_date)}</td>
+                    <td className="px-5 py-4 text-gray-600 text-xs whitespace-nowrap text-center align-middle">{formatDate(item.return_date)}</td>
+                    <td className="px-5 py-4 text-center align-middle">
+                      <span className={`inline-flex items-center justify-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap w-24 ${
                         isActive(item) ? "text-blue-700 bg-blue-50" : "text-gray-500 bg-gray-100"
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${isActive(item) ? "bg-blue-500" : "bg-gray-400"}`} />
                         {isActive(item) ? "Dipinjam" : "Dikembalikan"}
                       </span>
                     </td>
-                    <td className="px-3 py-4 text-gray-500 text-xs align-middle">
+                    <td className="px-5 py-4 text-gray-500 text-xs align-middle">
                       <p className="line-clamp-2 leading-relaxed">{item.note || "-"}</p>
                     </td>
-                    <td className="px-3 py-4 align-middle">
+                    <td className="px-5 py-4 align-middle">
                       <div className="flex items-center justify-center gap-1.5 min-w-0">
                         {isActive(item) ? (
                           <button onClick={() => openEdit(item)}
@@ -531,13 +620,29 @@ export default function AssignmentList() {
                   {/* Field: Nama Peminjam */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nama Peminjam <span className="text-red-500">*</span></label>
-                    <div className="relative" ref={dropdownRef}>
+                    <div className={`relative ${showDropdown ? "z-30" : "z-10"}`} ref={dropdownRef}>
                       <input type="text"
                         className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.user_name ? "border-red-400" : "border-gray-200"}`}
                         placeholder={loadingKaryawan ? "Memuat data karyawan..." : "Ketik nama karyawan..."}
                         value={karyawanInput} disabled={loadingKaryawan}
                         onChange={(e) => { setKaryawanInput(e.target.value); setForm((f) => ({ ...f, user_name: e.target.value })); }}
+                        onFocus={() => { if (karyawanDropdown.length > 0) setShowDropdown(true); }}
                       />
+                      {showDropdown && karyawanDropdown.length > 0 && (
+                        <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg z-50 flex flex-col divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-100">
+                          {karyawanDropdown.map((k) => (
+                            <button
+                              key={k.username}
+                              type="button"
+                              onClick={() => selectKaryawan(k)}
+                              className="w-full text-left px-4 py-3 text-xs transition hover:bg-slate-50 flex flex-col gap-0.5 text-slate-700"
+                            >
+                              <span className="font-semibold text-slate-800">{k.name}</span>
+                              <span className="text-[10px] text-gray-400 font-semibold">{k.departemen} • {k.pos}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {errors.user_name && <p className="text-red-500 text-xs mt-1">{errors.user_name}</p>}
                   </div>

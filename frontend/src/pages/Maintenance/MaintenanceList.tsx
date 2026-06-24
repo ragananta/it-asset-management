@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
+import axios from "axios";
 import { useAssets } from "../../context/AssetsContext";
 import { usePolling } from "../../hooks/usePolling";
-import { Search, Plus, Pencil, Trash2, X, Check, Wrench, Download, Filter, Save } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, Wrench, Download, Filter, Save, ChevronUp, ChevronDown } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
@@ -64,16 +66,38 @@ export default function MaintenanceList() {
   const [loading, setLoading] = useState(true);
   const [totalCost, setTotalCost] = useState(0);
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterDateFrom, setFilterDateFrom] = useState("");
-  const [filterDateTo, setFilterDateTo] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get("status") || "");
+  const [filterDateFrom, setFilterDateFrom] = useState(() => searchParams.get("date_from") || "");
+  const [filterDateTo, setFilterDateTo] = useState(() => searchParams.get("date_to") || "");
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
-  const [rowsPerPage, setRowsPerPage] = useRowsPerPage();
-  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
+  const [currentPage, setCurrentPage] = useState(() => {
+    return parseInt(searchParams.get("page") || "1", 10);
+  });
+
+  const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "date");
+  const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "desc");
+  const isFetchingRef = useRef(false);
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (currentPage > 1) params.page = String(currentPage);
+    if (search) params.search = search;
+    if (filterStatus) params.status = filterStatus;
+    if (filterDateFrom) params.date_from = filterDateFrom;
+    if (filterDateTo) params.date_to = filterDateTo;
+    if (sortBy && sortBy !== "date") params.sort = sortBy;
+    if (sortOrder && sortOrder !== "desc") params.order = sortOrder;
+    setSearchParams(params, { replace: true });
+  }, [currentPage, search, filterStatus, filterDateFrom, filterDateTo, rowsPerPage, sortBy, sortOrder, setSearchParams]);
+
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -120,18 +144,24 @@ export default function MaintenanceList() {
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+
     const fetchData = async () => {
+      if (isFetchingRef.current) return;
       try {
+        isFetchingRef.current = true;
         setLoading(true);
         const params = new URLSearchParams({ page: String(currentPage), per_page: String(rowsPerPage) });
         if (search) params.append("search", search);
         if (filterStatus) params.append("status", filterStatus);
         if (filterDateFrom) params.append("date_from", filterDateFrom);
         if (filterDateTo) params.append("date_to", filterDateTo);
+        if (sortBy) params.append("sort_by", sortBy);
+        if (sortOrder) params.append("sort_order", sortOrder);
 
-        const res = await api.get(`/maintenance-logs?${params}`);
-        if (cancelled) return;
+        const res = await api.get(`/maintenance-logs?${params}`, {
+          signal: controller.signal
+        });
 
         const payload = res?.data?.data;
 
@@ -160,17 +190,36 @@ export default function MaintenanceList() {
           setTotalCost(0);
         }
       } catch (err) {
-        if (!cancelled) console.error("ERROR fetch maintenance:", err);
+        if (!axios.isCancel(err)) {
+          console.error("ERROR fetch maintenance:", err);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        isFetchingRef.current = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
     };
     fetchData();
-    return () => { cancelled = true; };
-  }, [currentPage, rowsPerPage, search, filterStatus, filterDateFrom, filterDateTo, refreshKey]);
+    return () => {
+      controller.abort();
+      isFetchingRef.current = false;
+    };
+  }, [currentPage, rowsPerPage, search, filterStatus, filterDateFrom, filterDateTo, sortBy, sortOrder, refreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
   const ongoingCount = logs.filter((l) => l.status === "ongoing").length;
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+    setCurrentPage(1);
+  };
 
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = async () => {
@@ -420,11 +469,51 @@ export default function MaintenanceList() {
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-12">No</th>
               <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap min-w-[160px]">Aset</th>
-              <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-28">Tanggal</th>
+              <th 
+                onClick={() => handleSort("date")} 
+                className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-28 cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center gap-1">
+                  Tanggal
+                  {sortBy === "date" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
               <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase w-[30%]">Deskripsi</th>
-              <th className="px-4 py-4 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-36">Biaya</th>
-              <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-32">PIC</th>
-              <th className="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-28">Status</th>
+              <th 
+                onClick={() => handleSort("cost")} 
+                className="px-4 py-4 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-36 cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Biaya
+                  {sortBy === "cost" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort("pic")} 
+                className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-32 cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center gap-1">
+                  PIC
+                  {sortBy === "pic" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort("status")} 
+                className="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-28 cursor-pointer hover:bg-gray-100 transition select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Status
+                  {sortBy === "status" && (
+                    sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-gray-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-700" />
+                  )}
+                </div>
+              </th>
               <th className="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-36">Aksi</th>
             </tr>
           </thead>
@@ -495,21 +584,6 @@ export default function MaintenanceList() {
               ))
             )}
           </tbody>
-
-          {/* TOTAL BIAYA */}
-          {!loading && logs.length > 0 && (
-            <tfoot>
-              <tr className="border-t-2 border-gray-100 bg-gray-50">
-                <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">
-                  Total Biaya ({totalData} log):
-                </td>
-                <td className="px-4 py-3 text-sm font-bold text-gray-800 text-right whitespace-nowrap">
-                  {formatCurrency(totalCost)}
-                </td>
-                <td colSpan={3} />
-              </tr>
-            </tfoot>
-          )}
         </table>
       </div>
 

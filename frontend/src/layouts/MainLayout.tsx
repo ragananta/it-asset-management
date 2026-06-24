@@ -23,10 +23,13 @@ const PAGE_NAMES: Record<string, string> = {
   "/maintenance": "Maintenance",
   "/assignments": "Assignments",
   "/employee-assets": "Employee Assets",
+  "/ploting-devices": "Tas Package",
+  "/store-packages": "Store Package",
   "/audit-logs":  "Audit Logs",
   "/logs":        "Activity Logs",
 };
 
+// ── Resolve page name ────────────────────────────────────────────────────────
 function getPageName(pathname: string): string {
   if (PAGE_NAMES[pathname]) return PAGE_NAMES[pathname];
   // Sub-route: /assets/123 → "Assets"
@@ -64,7 +67,7 @@ export default function MainLayout() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* HEADER */}
-        <div className="h-16 shrink-0 bg-white px-6 border-b border-gray-100 flex justify-between items-center shadow-sm">
+        <div className="h-16 shrink-0 bg-white px-6 flex justify-between items-center shadow-sm">
           <div>
             <h1 className="font-semibold text-gray-800 text-sm">{pageName}</h1>
             <p className="text-xs text-gray-400">IT Asset Management System</p>
@@ -98,6 +101,7 @@ export default function MainLayout() {
         </div>
 
       </div>
+
     </div>
   );
 }
