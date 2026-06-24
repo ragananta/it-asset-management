@@ -53,8 +53,8 @@ export default function TablePagination({
   };
 
   return (
-    <div className={`flex flex-wrap justify-between items-center gap-3 text-sm text-gray-500 ${className}`}>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+    <div className={`flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-500 ${className}`}>
+      <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-x-5">
         <div className="flex items-center gap-2">
           <span className="whitespace-nowrap">Rows per page</span>
           <div className="relative">

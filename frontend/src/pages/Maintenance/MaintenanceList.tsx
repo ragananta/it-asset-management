@@ -369,10 +369,10 @@ export default function MaintenanceList() {
         </div>
 
         {/* Kanan: Filter tanggal + Search + Export + Tambah */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
 
           {/* Search + Filter tanggal */}
-          <div className="relative w-80" ref={filterRef}>
+          <div className="relative w-full sm:w-80" ref={filterRef}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               placeholder="Cari maintenance..."
@@ -438,7 +438,7 @@ export default function MaintenanceList() {
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50 whitespace-nowrap"
+            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition disabled:opacity-50 w-full sm:w-auto"
           >
             <Download className="w-4 h-4" />
             {exporting ? "..." : "Export"}
@@ -446,7 +446,7 @@ export default function MaintenanceList() {
 
           {/* Tambah */}
           <button onClick={openCreate}
-            className="bg-blue-600 hover:bg-blue-700 transition text-white h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 whitespace-nowrap">
+            className="bg-blue-600 hover:bg-blue-700 transition text-white h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto">
             <Plus className="w-4 h-4" /> Tambah
           </button>
         </div>
@@ -463,8 +463,9 @@ export default function MaintenanceList() {
       />
 
       {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap w-12">No</th>
@@ -586,6 +587,7 @@ export default function MaintenanceList() {
           </tbody>
         </table>
       </div>
+    </div>
 
       {/* MODAL CREATE/EDIT */}
       {modalOpen && (

@@ -482,10 +482,10 @@ export default function PlotingDeviceDetail() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
         
         {/* Tabs Headers */}
-        <div className="flex border-b border-gray-100 px-4 bg-slate-50/50">
+        <div className="flex overflow-x-auto whitespace-nowrap border-b border-gray-100 px-4 bg-slate-50/50">
           <button
             onClick={() => setActiveTab("assets")}
-            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 ${
+            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 shrink-0 ${
               activeTab === "assets"
                 ? "border-teal-600 text-teal-600"
                 : "border-transparent text-gray-500 hover:text-slate-800"
@@ -495,7 +495,7 @@ export default function PlotingDeviceDetail() {
           </button>
           <button
             onClick={() => setActiveTab("assignments")}
-            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 ${
+            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 shrink-0 ${
               activeTab === "assignments"
                 ? "border-teal-600 text-teal-600"
                 : "border-transparent text-gray-500 hover:text-slate-800"
@@ -505,7 +505,7 @@ export default function PlotingDeviceDetail() {
           </button>
           <button
             onClick={() => setActiveTab("maintenance")}
-            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 ${
+            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 shrink-0 ${
               activeTab === "maintenance"
                 ? "border-teal-600 text-teal-600"
                 : "border-transparent text-gray-500 hover:text-slate-800"
@@ -515,7 +515,7 @@ export default function PlotingDeviceDetail() {
           </button>
           <button
             onClick={() => setActiveTab("timeline")}
-            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 ${
+            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition duration-200 shrink-0 ${
               activeTab === "timeline"
                 ? "border-teal-600 text-teal-600"
                 : "border-transparent text-gray-500 hover:text-slate-800"

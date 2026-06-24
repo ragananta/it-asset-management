@@ -543,7 +543,7 @@ export default function StorePackageModal({
                 </div>
 
                 {/* Table list of assets */}
-                <div className="border border-gray-150 rounded-xl overflow-hidden max-h-[250px] overflow-y-auto bg-white">
+                <div className="border border-gray-150 rounded-xl max-h-[250px] overflow-auto w-full bg-white">
                   <table className="w-full text-xs text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100 text-slate-500 font-bold uppercase tracking-wider">
@@ -670,7 +670,7 @@ export default function StorePackageModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+        <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onClose}

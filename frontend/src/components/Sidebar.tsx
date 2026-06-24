@@ -20,7 +20,12 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import logo from "../assets/logo-saloka.png";
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
 
   // State to track open dropdown menus
@@ -72,7 +77,8 @@ export default function Sidebar() {
       }
       return next;
     });
-  }, [location.pathname]);
+    onClose();
+  }, [location.pathname, onClose]);
 
   const menus = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -112,7 +118,9 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-64 bg-white h-full flex flex-col shrink-0">
+    <div className={`fixed inset-y-0 left-0 z-40 w-64 bg-white h-full flex flex-col shrink-0 transform -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0 md:static ${
+      isOpen ? "translate-x-0" : "-translate-x-full"
+    }`}>
 
       {/* LOGO — selaras dengan tinggi header (h-16) */}
       <div className="h-16 shrink-0 px-4 flex items-center justify-center">

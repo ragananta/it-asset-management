@@ -204,19 +204,19 @@ export default function Dashboard() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-start sm:justify-end">
           <button
             onClick={() => setRefreshKey((k) => k + 1)}
             disabled={loading}
             title="Refresh data"
-            className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-200 shadow-sm flex items-center justify-center transition-all duration-300 hover:shadow active:scale-95 disabled:opacity-50"
+            className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-200 shadow-sm flex items-center justify-center transition-all duration-300 hover:shadow active:scale-95 disabled:opacity-50 shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button
             onClick={handleExportAll}
             disabled={exporting}
-            className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 h-10 px-5 rounded-full text-[12px] font-semibold shadow-sm flex items-center gap-2.5 transition-all duration-300 hover:shadow hover:border-slate-300 hover:text-emerald-600 hover:border-emerald-250 active:scale-95 disabled:opacity-50"
+            className="flex-1 sm:flex-initial bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 h-10 px-5 rounded-full text-[12px] font-semibold shadow-sm flex items-center justify-center gap-2.5 transition-all duration-300 hover:shadow hover:border-slate-300 hover:text-emerald-600 hover:border-emerald-250 active:scale-95 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
             {exporting ? "Menyiapkan..." : "Export Semua Data"}
@@ -426,7 +426,7 @@ export default function Dashboard() {
             <select
               value={filterDept}
               onChange={(e) => setFilterDept(e.target.value as any)}
-              className="text-[12px] font-semibold text-slate-600 bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/15 focus:border-emerald-500 cursor-pointer transition-all"
+              className="w-full sm:w-auto text-[12px] font-semibold text-slate-600 bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/15 focus:border-emerald-500 cursor-pointer transition-all"
             >
               <option value="all">Semua Asset</option>
               <option value="active">Asset Bagus</option>

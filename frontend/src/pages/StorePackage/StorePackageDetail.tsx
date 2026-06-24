@@ -377,7 +377,7 @@ export default function StorePackageDetail() {
                 </p>
               </div>
             </div>
-            <div className="bg-slate-50 px-6 py-4 flex items-center justify-end gap-2 border-t border-slate-100">
+            <div className="bg-slate-50 px-6 py-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setUnlinkTarget(null)}

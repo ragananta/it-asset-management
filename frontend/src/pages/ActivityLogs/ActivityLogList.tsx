@@ -301,10 +301,10 @@ export default function ActivityLogList() {
       </div>
 
       {/* SEARCH + FILTER */}
-      <div className="flex justify-end items-center gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 mb-5">
 
         {/* Search */}
-        <div className="relative w-96" ref={filterRef}>
+        <div className="relative w-full sm:w-80 md:w-96" ref={filterRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             placeholder="Cari user, IP..."
@@ -428,8 +428,9 @@ export default function ActivityLogList() {
       />
 
       {/* TABLE */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12">NO</th>
@@ -549,6 +550,7 @@ export default function ActivityLogList() {
           </tbody>
         </table>
       </div>
+    </div>
 
       {/* MODAL DETAIL */}
       {detailLog && (

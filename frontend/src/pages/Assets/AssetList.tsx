@@ -316,8 +316,8 @@ export default function AssetList() {
       )}
 
       {/* SEARCH + ACTION */}
-      <div className="flex justify-end items-center gap-3 mb-5">
-        <div className="relative w-96" ref={filterRef}>
+      <div className="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 mb-5">
+        <div className="relative w-full sm:w-80 md:w-96" ref={filterRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             placeholder="Cari asset..."
@@ -409,7 +409,7 @@ export default function AssetList() {
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition disabled:opacity-50"
+          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition disabled:opacity-50 w-full sm:w-auto"
         >
           <Download className="w-4 h-4" />
           {exporting ? "..." : "Export"}
@@ -418,7 +418,7 @@ export default function AssetList() {
         {/* Tambah */}
         <button
           onClick={openCreate}
-          className="bg-blue-600 hover:bg-blue-700 transition text-white h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center gap-2"
+          className="bg-blue-600 hover:bg-blue-700 transition text-white h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           + Tambah
         </button>
@@ -467,7 +467,8 @@ export default function AssetList() {
 
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-12 whitespace-nowrap">NO</th>
@@ -579,6 +580,7 @@ export default function AssetList() {
           </tbody>
         </table>
       </div>
+    </div>
 
       <AssetModal
         open={modalOpen}

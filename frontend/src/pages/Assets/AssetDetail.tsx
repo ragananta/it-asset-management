@@ -494,7 +494,7 @@ export default function AssetDetail() {
               </p>
             </div>
 
-            <div className="flex gap-2 w-full mt-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full mt-2">
               <button
                 onClick={handlePrintQR}
                 className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-4 py-2.5 rounded-full transition duration-200"
@@ -542,7 +542,7 @@ export default function AssetDetail() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {asset.properties.map((prop) => (
               <div
                 key={prop.id}

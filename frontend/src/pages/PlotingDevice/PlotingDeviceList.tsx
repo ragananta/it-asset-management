@@ -436,7 +436,7 @@ export default function PlotingDeviceList() {
       )}
 
       {/* TOOLBAR */}
-      <div className="bg-white rounded-xl border border-gray-100 p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-sm">
+      <div className="bg-white rounded-xl border border-gray-100 p-4 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between shadow-sm">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           {/* Status Filter */}
           <div className="relative w-full sm:w-48">

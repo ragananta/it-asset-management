@@ -312,7 +312,7 @@ export default function AssetModal({
         </div>
 
         {/* Modal Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-7 py-6 bg-slate-50/20">
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-7 sm:py-6 bg-slate-50/20">
           {errors.form && (
             <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
               {errors.form}
@@ -320,7 +320,7 @@ export default function AssetModal({
           )}
 
           {/* Inner Card Container */}
-          <div className="border border-slate-100 rounded-2xl p-6 bg-white shadow-sm">
+          <div className="border border-slate-100 rounded-2xl p-4 sm:p-6 bg-white shadow-sm">
             {/* Card Section Header */}
             <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
               <Package className="w-5 h-5 text-emerald-600" />
@@ -329,7 +329,7 @@ export default function AssetModal({
               </span>
             </div>
 
-            <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Field label="Kategori" required error={errors.category_id || errors.category_name}>
                 <select
                   ref={categorySelectRef}

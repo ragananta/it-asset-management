@@ -1,7 +1,7 @@
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 
 // ── Decode JWT tanpa library eksternal ──────────────────────────────────────
 function getUserFromToken(): string {
@@ -51,6 +51,7 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const userName = useMemo(() => getUserFromToken(), []);
   const pageName = getPageName(location.pathname);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -61,16 +62,33 @@ export default function MainLayout() {
     <div className="flex h-screen bg-gray-100 overflow-hidden">
 
       {/* SIDEBAR */}
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* BACKDROP OVERLAY FOR MOBILE */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden transition-opacity duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* CONTENT */}
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* HEADER */}
         <div className="h-16 shrink-0 bg-white px-6 flex justify-between items-center shadow-sm">
-          <div>
-            <h1 className="font-semibold text-gray-800 text-sm">{pageName}</h1>
-            <p className="text-xs text-gray-400">IT Asset Management System</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition"
+              title="Open menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="font-semibold text-gray-800 text-sm">{pageName}</h1>
+              <p className="text-xs text-gray-400">IT Asset Management System</p>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
