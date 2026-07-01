@@ -82,9 +82,30 @@ export default function Dashboard() {
   const [filterDept, setFilterDept] = useState<"all" | "active" | "borrowed" | "maintenance">("all");
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [expandedDepts, setExpandedDepts] = useState<string[]>([]);
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+
+  const DEPT_FILTER_OPTIONS: { value: "all" | "active" | "borrowed" | "maintenance"; label: string }[] = [
+    { value: "all", label: "Semua Asset" },
+    { value: "active", label: "Asset Bagus" },
+    { value: "borrowed", label: "Asset Dipinjam" },
+    { value: "maintenance", label: "Asset Maintenance" },
+  ];
+
+  const [showAllCategoriesDepts, setShowAllCategoriesDepts] = useState<string[]>([]);
 
   const toggleDeptExpand = (dept: string) => {
-    setExpandedDepts((prev) =>
+    setExpandedDepts((prev) => {
+      const isExpanded = prev.includes(dept);
+      if (isExpanded) {
+        setShowAllCategoriesDepts((prevAll) => prevAll.filter((d) => d !== dept));
+        return prev.filter((d) => d !== dept);
+      }
+      return [...prev, dept];
+    });
+  };
+
+  const toggleShowAllCategories = (dept: string) => {
+    setShowAllCategoriesDepts((prev) =>
       prev.includes(dept) ? prev.filter((d) => d !== dept) : [...prev, dept]
     );
   };
@@ -385,7 +406,7 @@ export default function Dashboard() {
               <p className="text-slate-400 text-[12px] font-medium">Belum ada data kategori.</p>
             </div>
           ) : (
-            <div className="space-y-4 my-auto">
+            <div className="space-y-4 my-auto max-h-[250px] overflow-y-auto pr-1.5 no-scrollbar">
               {categoryChart.map((item, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <div className="w-32 shrink-0">
@@ -423,16 +444,43 @@ export default function Dashboard() {
               <h3 className="text-[18px] font-bold text-slate-800">Persebaran Asset per Departemen</h3>
             </div>
             
-            <select
-              value={filterDept}
-              onChange={(e) => setFilterDept(e.target.value as any)}
-              className="w-full sm:w-auto text-[12px] font-semibold text-slate-600 bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/15 focus:border-emerald-500 cursor-pointer transition-all"
-            >
-              <option value="all">Semua Asset</option>
-              <option value="active">Asset Bagus</option>
-              <option value="borrowed">Asset Dipinjam</option>
-              <option value="maintenance">Asset Maintenance</option>
-            </select>
+            <div className="relative w-full sm:w-52">
+              <button
+                type="button"
+                onClick={() => setShowDeptDropdown(!showDeptDropdown)}
+                className="w-full h-9 px-4 flex items-center justify-between rounded-lg border border-gray-200 bg-slate-50 text-[12px] font-semibold text-slate-600 hover:bg-slate-100/70 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/15 transition-all cursor-pointer"
+              >
+                <span>
+                  {DEPT_FILTER_OPTIONS.find((opt) => opt.value === filterDept)?.label}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${showDeptDropdown ? "rotate-180" : ""}`} />
+              </button>
+
+              {showDeptDropdown && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowDeptDropdown(false)} />
+                  <div className="absolute right-0 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-25 overflow-hidden divide-y divide-gray-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    {DEPT_FILTER_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setFilterDept(opt.value);
+                          setShowDeptDropdown(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-xs transition hover:bg-slate-50 ${
+                          filterDept === opt.value
+                            ? "bg-emerald-50/50 font-bold text-emerald-700"
+                            : "text-slate-600 font-medium"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {loadingAssignments || loadingKaryawan ? (
@@ -455,7 +503,7 @@ export default function Dashboard() {
                   <p className="text-slate-400 text-[14px] font-medium">Belum ada data persebaran asset.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1.5 no-scrollbar">
                   {departmentDistribution.map((item, i) => {
                     const maxCount = departmentDistribution[0]?.count || 1;
                     const pct = (item.count / maxCount) * 100;
@@ -497,9 +545,12 @@ export default function Dashboard() {
                         {expandedDepts.includes(item.department) && (
                           <div
                             onClick={(e) => e.stopPropagation()}
-                            className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-2"
+                            className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-2 animate-in fade-in duration-200"
                           >
-                            {item.categories.slice(0, 5).map((cat) => (
+                            {(showAllCategoriesDepts.includes(item.department)
+                              ? item.categories
+                              : item.categories.slice(0, 5)
+                            ).map((cat) => (
                               <div
                                 key={cat.categoryName}
                                 className="bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1 text-[12px] font-semibold text-slate-600 flex items-center gap-1.5"
@@ -509,9 +560,15 @@ export default function Dashboard() {
                               </div>
                             ))}
                             {item.categories.length > 5 && (
-                              <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg px-2.5 py-1 text-[12px] font-bold text-slate-400">
-                                +{item.categories.length - 5} categories more
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleShowAllCategories(item.department)}
+                                className="bg-slate-50 hover:bg-slate-100 hover:text-slate-650 transition-all border border-slate-200 border-dashed rounded-lg px-2.5 py-1 text-[12px] font-bold text-slate-400 cursor-pointer"
+                              >
+                                {showAllCategoriesDepts.includes(item.department)
+                                  ? "Sembunyikan"
+                                  : `+${item.categories.length - 5} kategori lainnya`}
+                              </button>
                             )}
                           </div>
                         )}
