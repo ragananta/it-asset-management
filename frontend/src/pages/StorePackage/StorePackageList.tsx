@@ -16,7 +16,9 @@ import {
 } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
-import StorePackageModal from "./StorePackageModal";
+import StorePackageModal, { clearStorePackageDropdownCache } from "./StorePackageModal";
+import { usePolling } from "../../hooks/usePolling";
+import { isListEqual } from "../../utils/equality";
 
 interface StorePackageItem {
   store_code: string;
@@ -35,14 +37,29 @@ export default function StorePackageList() {
 
   // Search & Pagination states
   const initialSearch = searchParams.get("search") || "";
+  const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
   const [rowsPerPage, setRowsPerPage] = useRowsPerPage(10);
   const [currentPage, setCurrentPage] = useState(() => {
     return parseInt(searchParams.get("page") || "1", 10);
   });
 
+  const [totalData, setTotalData] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [sortBy, setSortBy] = useState(() => searchParams.get("sort") || "store_code");
   const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "asc");
+
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchInput = (val: string) => {
+    setSearchInput(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setSearch(val);
+      setCurrentPage(1);
+    }, 400);
+  };
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -63,6 +80,15 @@ export default function StorePackageList() {
   const [deleteTarget, setDeleteTarget] = useState<StorePackageItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const isFetchingRef = useRef(false);
+  const isSilentRef = useRef(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    setRefreshKey((k) => k + 1);
+  };
+
+  usePolling(triggerSilentRefresh, 60000, !modalOpen && !deleteTarget);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,7 +97,7 @@ export default function StorePackageList() {
       controller.abort();
       isFetchingRef.current = false;
     };
-  }, []);
+  }, [currentPage, rowsPerPage, search, sortBy, sortOrder, refreshKey]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -87,10 +113,39 @@ export default function StorePackageList() {
     if (isFetchingRef.current) return;
     try {
       isFetchingRef.current = true;
-      setLoading(true);
-      const res = await api.get("/store-packages", { signal });
+      if (!isSilentRef.current) {
+        setLoading(true);
+      }
+
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        per_page: String(rowsPerPage),
+        sort: sortBy,
+        order: sortOrder,
+      });
+      if (search) params.append("search", search);
+
+      const res = await api.get(`/store-packages?${params}`, { signal });
       if (res.data?.success) {
-        setStorePackages(res.data.data || []);
+        const payload = res.data.data;
+        if (payload?.data) {
+          if (isSilentRef.current && isListEqual(storePackages, payload.data, ['store_code', 'total_assets'])) {
+            isSilentRef.current = false;
+            return;
+          }
+          setStorePackages(payload.data || []);
+          setTotalData(payload.total ?? 0);
+          setTotalPages(payload.last_page ?? 1);
+        } else {
+          const dataArray = Array.isArray(payload) ? payload : [];
+          if (isSilentRef.current && isListEqual(storePackages, dataArray, ['store_code', 'total_assets'])) {
+            isSilentRef.current = false;
+            return;
+          }
+          setStorePackages(dataArray);
+          setTotalData(dataArray.length);
+          setTotalPages(1);
+        }
       }
     } catch (err: any) {
       if (!axios.isCancel(err)) {
@@ -101,6 +156,7 @@ export default function StorePackageList() {
       isFetchingRef.current = false;
       if (!signal?.aborted) {
         setLoading(false);
+        isSilentRef.current = false;
       }
     }
   };
@@ -110,38 +166,7 @@ export default function StorePackageList() {
     setTimeout(() => setToast(""), 3000);
   };
 
-  // Filtered packages for list display
-  const filteredPackages = storePackages.filter((p) => {
-    const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      p.store_code.toLowerCase().includes(q) ||
-      p.store_name.toLowerCase().includes(q)
-    );
-  });
-
-  // Client-side sorting
-  const sortedPackages = [...filteredPackages].sort((a, b) => {
-    let valA = a[sortBy as keyof StorePackageItem];
-    let valB = b[sortBy as keyof StorePackageItem];
-
-    if (typeof valA === "string") {
-      valA = valA.toLowerCase();
-      valB = (valB as string).toLowerCase();
-    }
-
-    if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-    if (valA > valB) return sortOrder === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  // Client-side pagination
-  const totalData = sortedPackages.length;
-  const totalPages = Math.ceil(totalData / rowsPerPage);
-  const paginatedPackages = sortedPackages.slice(
-    (currentPage - 1) * rowsPerPage,
-    currentPage * rowsPerPage
-  );
+  const paginatedPackages = storePackages;
 
   const openCreate = () => {
     setEditTargetCode(null);
@@ -160,6 +185,7 @@ export default function StorePackageList() {
       await api.delete(`/store-packages/${deleteTarget.store_code}`);
       showToast(`Store Package "${deleteTarget.store_name}" berhasil dibersihkan.`);
       setDeleteTarget(null);
+      clearStorePackageDropdownCache();
       fetchData();
     } catch (err: any) {
       console.error("Gagal menghapus store package:", err);
@@ -190,16 +216,14 @@ export default function StorePackageList() {
             <input
               placeholder="Cari kode store, nama store..."
               className="w-full h-10 pl-9 pr-9 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setCurrentPage(1);
-              }}
+              value={searchInput}
+              onChange={(e) => handleSearchInput(e.target.value)}
             />
-            {search && (
+            {searchInput && (
               <button
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 onClick={() => {
+                  handleSearchInput("");
                   setSearch("");
                   setCurrentPage(1);
                 }}

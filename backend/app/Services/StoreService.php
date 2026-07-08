@@ -27,7 +27,7 @@ class StoreService
         }
 
         try {
-            return Cache::remember('store_options_list', 300, function () {
+            return Cache::remember('store_options_list', 86400, function () {
                 $response = Http::timeout(10)->get($this->url, [
                     'page' => 1,
                     'no_pagination' => 'true',
@@ -52,7 +52,11 @@ class StoreService
             Log::error('StoreService fetch failed: ' . $e->getMessage());
 
             // Fallback to cache if available
-            return Cache::get('store_options_list', []);
+            if (Cache::has('store_options_list')) {
+                return Cache::get('store_options_list');
+            }
+
+            throw new \Exception('Unable to retrieve store information from the POS service.');
         }
     }
 

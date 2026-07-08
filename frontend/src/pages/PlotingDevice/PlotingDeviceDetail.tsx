@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../../api/axios";
-import { usePolling } from "@/hooks/usePolling";
 import {
   Smartphone,
   Calendar,
@@ -209,13 +208,7 @@ export default function PlotingDeviceDetail() {
   const isFetchingDetailRef = useRef(false);
   const isFetchingTimelineRef = useRef(false);
 
-  const triggerSilentRefresh = () => {
-    isSilentRef.current = true;
-    setRefreshKey((k) => k + 1);
-    setTimelineRefreshKey((k) => k + 1);
-  };
 
-  usePolling(triggerSilentRefresh, 60000);
 
   // Fetch Device details
   useEffect(() => {

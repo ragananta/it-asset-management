@@ -4,7 +4,6 @@ import api from "../../api/axios";
 import { useKaryawan } from "../../context/KaryawanContext";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
-import { usePolling } from "@/hooks/usePolling";
 import {
   Users,
   ChevronDown,
@@ -91,12 +90,7 @@ export default function AssetsByEmployee() {
   const isSilentRef = useRef(false);
   const isFetchingRef = useRef(false);
 
-  const triggerSilentRefresh = () => {
-    isSilentRef.current = true;
-    setRefreshKey((k) => k + 1);
-  };
 
-  usePolling(triggerSilentRefresh, 60000);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../../api/axios";
-import { usePolling } from "@/hooks/usePolling";
 import {
   ArrowLeft, Package, Tag, User, Wrench,
   Calendar, DollarSign, Hash, Plus,
@@ -91,12 +90,7 @@ export default function AssetDetail() {
   // delete property
   const [propDeleteTarget, setPropDeleteTarget] = useState<Property | null>(null);
 
-  const triggerSilentRefresh = () => {
-    isSilentRef.current = true;
-    fetchDetail();
-  };
 
-  usePolling(triggerSilentRefresh, 60000, !propModalOpen && !propDeleteTarget);
 
   useEffect(() => {
     if (!toast) return;

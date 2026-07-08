@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\StorePackageIndexRequest;
 
 class StorePackageController extends Controller
 {
@@ -26,33 +27,43 @@ class StorePackageController extends Controller
     /**
      * GET /api/store-packages
      */
-    public function index()
+    public function index(StorePackageIndexRequest $request)
     {
         try {
-            $stores = $this->storeService->getStoreOptions();
-            
-            // Get asset counts grouped by store_code
-            $mappings = StoreAssetMapping::select('store_code', DB::raw('count(*) as total'))
-                ->groupBy('store_code')
-                ->get()
-                ->pluck('total', 'store_code')
-                ->toArray();
+            $query = StoreAssetMapping::query()
+                ->select(
+                    'store_code', 
+                    'store_name', 
+                    DB::raw('MIN(store_id) as id'), 
+                    DB::raw('count(*) as total_assets'), 
+                    DB::raw('MIN(created_at) as created_at')
+                )
+                ->groupBy('store_code', 'store_name');
 
-            $result = [];
-            foreach ($stores as $store) {
-                $code = $store['code'];
-                $total = $mappings[$code] ?? 0;
-                
-                if ($total > 0) {
-                    $result[] = [
-                        'store_code'   => $code,
-                        'store_name'   => $store['name'],
-                        'total_assets' => $total,
-                    ];
-                }
+            // Search
+            if ($request->filled('search')) {
+                $search = $request->input('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('store_code', 'like', "%{$search}%")
+                      ->orWhere('store_name', 'like', "%{$search}%");
+                });
             }
 
-            return $this->successResponse($result, 'Store packages berhasil diambil');
+            // Sorting (strictly using the validated whitelisted values)
+            $sortBy = $request->input('sort');
+            $sortOrder = $request->input('order');
+
+            if ($sortBy === 'total_assets') {
+                $query->orderBy('total_assets', $sortOrder);
+            } else {
+                $query->orderBy($sortBy, $sortOrder);
+            }
+
+            // Always return native paginated data
+            $perPage = $request->input('per_page');
+            $data = $query->paginate($perPage);
+
+            return $this->successResponse($data, 'Store packages berhasil diambil');
         } catch (\Exception $e) {
             return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
@@ -64,37 +75,51 @@ class StorePackageController extends Controller
     public function show($storeCode)
     {
         try {
-            $mappings = StoreAssetMapping::where('store_code', $storeCode)
-                ->with('asset.category')
-                ->get();
-
-            if ($mappings->isEmpty()) {
+            // Check store validity using POS API lookup
+            try {
                 $store = $this->storeService->getStoreByCode($storeCode);
-                if (!$store) {
-                    return $this->notFoundResponse('Store tidak ditemukan');
-                }
-                $storeName = $store['name'];
-                $storeCode = $store['code'];
-            } else {
-                $storeName = $mappings->first()->store_name;
+            } catch (\Exception $e) {
+                // If POS API communication failed, log it and return 503 Service Unavailable
+                \Illuminate\Support\Facades\Log::error('Store Package show failure POS API communication: ' . $e->getMessage());
+                return $this->errorResponse('Unable to retrieve store information from the POS service.', 503);
             }
+
+            if (!$store) {
+                return $this->notFoundResponse('Store Package tidak ditemukan.');
+            }
+
+            // Eager load only columns required by the frontend/API (no N+1 queries)
+            $mappings = StoreAssetMapping::where('store_code', $storeCode)
+                ->with([
+                    'asset' => function ($query) {
+                        $query->select('id', 'asset_code', 'asset_name', 'category_id', 'status', 'condition_status', 'serial_number');
+                    },
+                    'asset.category' => function ($query) {
+                        $query->select('id', 'name');
+                    }
+                ])
+                ->get();
 
             $assets = $mappings->map(function ($mapping) {
                 $asset = $mapping->asset;
                 if (!$asset) return null;
                 return [
-                    'id'         => $asset->id,
-                    'asset_code' => $asset->asset_code,
-                    'asset_name' => $asset->asset_name,
-                    'category'   => $asset->category?->name ?? '-',
-                    'status'     => $asset->status,
-                    'condition'  => $asset->condition_status,
+                    'id'               => $asset->id,
+                    'asset_id'         => $asset->id,
+                    'asset_code'       => $asset->asset_code,
+                    'asset_name'       => $asset->asset_name,
+                    'category'         => $asset->category?->name ?? '-',
+                    'status'           => $asset->status,
+                    'condition'        => $asset->condition_status,
+                    'condition_status' => $asset->condition_status,
+                    'serial_number'    => $asset->serial_number,
                 ];
             })->filter()->values()->toArray();
 
             $data = [
+                'id'           => $store['id'],
                 'store_code'   => $storeCode,
-                'store_name'   => $storeName,
+                'store_name'   => $store['name'],
                 'total_assets' => count($assets),
                 'assets'       => $assets,
             ];

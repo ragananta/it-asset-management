@@ -85,7 +85,7 @@ class MasterAssetController extends Controller
 
             $cacheKey = 'assets:index:' . md5($request->fullUrl());
 
-            $data = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($cacheKey, $request) {
+            $data = Cache::remember($cacheKey, 60, function () use ($cacheKey, $request) {
                 // Track cache key untuk keperluan clear spesifik
                 $keys = Cache::get('assets:cache_keys', []);
                 if (!in_array($cacheKey, $keys)) {
@@ -95,6 +95,7 @@ class MasterAssetController extends Controller
 
                 $query = MasterAsset::with([
                     'category:id,name',
+                    'containerAsset:id,container_asset_id,contained_asset_id',
                     'containerAsset.containerAsset:id,asset_code,asset_name',
                     'activeAssignment:id,asset_id,user_name',
                     'storeAssetMapping:id,asset_id,store_code,store_name',
@@ -182,6 +183,11 @@ class MasterAssetController extends Controller
                     } else {
                         $asset->setAttribute('store_package', null);
                     }
+
+                    // Unset relation models that are only used for calculations to avoid heavy payload serialization
+                    $asset->unsetRelation('containerAsset');
+                    $asset->unsetRelation('activeAssignment');
+                    $asset->unsetRelation('storeAssetMapping');
 
                     return $asset;
                 });

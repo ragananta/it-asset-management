@@ -20,6 +20,22 @@ class StoreAssetMapping extends Model
         'updated_by',
     ];
 
+    protected static function booted()
+    {
+        $clearCache = function () {
+            \Illuminate\Support\Facades\Cache::forget('dashboard:index');
+            
+            $assetKeys = \Illuminate\Support\Facades\Cache::get('assets:cache_keys', []);
+            foreach ($assetKeys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('assets:cache_keys');
+        };
+
+        static::saved($clearCache);
+        static::deleted($clearCache);
+    }
+
     public function asset()
     {
         return $this->belongsTo(MasterAsset::class, 'asset_id');

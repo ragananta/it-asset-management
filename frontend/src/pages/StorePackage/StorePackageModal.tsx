@@ -40,6 +40,20 @@ interface StorePackageModalProps {
   onSuccess: (msg: string) => void;
 }
 
+let cachedStores: StoreOption[] = [];
+let cachedAssets: Asset[] = [];
+let hasLoadedStores = false;
+let hasLoadedAssets = false;
+let activeFetchPromise: Promise<any> | null = null;
+
+export function clearStorePackageDropdownCache() {
+  cachedStores = [];
+  cachedAssets = [];
+  hasLoadedStores = false;
+  hasLoadedAssets = false;
+  activeFetchPromise = null;
+}
+
 export default function StorePackageModal({
   isOpen,
   onClose,
@@ -50,6 +64,8 @@ export default function StorePackageModal({
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingStoreOptions, setLoadingStoreOptions] = useState(false);
+  const [loadingAssetsPool, setLoadingAssetsPool] = useState(false);
 
   // Form states
   const [selectedStoreId, setSelectedStoreId] = useState<number | "">("");
@@ -83,7 +99,6 @@ export default function StorePackageModal({
   }, [isOpen, editTargetCode]);
 
   const loadData = async () => {
-    setLoading(true);
     setErrorMsg("");
     setSelectedStoreId("");
     setSelectedAssetIds([]);
@@ -93,51 +108,88 @@ export default function StorePackageModal({
     setStatusFilter("");
     setShowCategoryDropdown(false);
     setShowStatusDropdown(false);
-    
-    try {
-      const [resStores, resAssets] = await Promise.all([
-        api.get("/stores/options"),
-        api.get("/assets?per_page=1000"),
-      ]);
 
-      let loadedStores: StoreOption[] = [];
-      if (resStores.data?.success) {
-        loadedStores = resStores.data.data || [];
-        setStores(loadedStores);
-      }
-
-      if (resAssets.data?.success) {
-        setAssets(resAssets.data.data?.data || []);
-      }
-
+    if (hasLoadedStores && hasLoadedAssets) {
+      setStores(cachedStores);
+      setAssets(cachedAssets);
+      
       // If in edit mode, fetch the current package mapping details
       if (editTargetCode) {
+        setLoading(true);
+        try {
+          const resDetail = await api.get(`/store-packages/${editTargetCode}`);
+          if (resDetail.data?.success) {
+            const detail = resDetail.data.data;
+            const storeOpt = cachedStores.find((s) => s.code === editTargetCode);
+            if (storeOpt) {
+              setSelectedStoreId(storeOpt.id);
+            } else {
+              const fallbackStore = { id: -1, code: detail.store_code, name: detail.store_name };
+              setStores([...cachedStores, fallbackStore]);
+              setSelectedStoreId(-1);
+            }
+            setSelectedAssetIds((detail.assets || []).map((a: any) => a.id));
+          }
+        } catch (err) {
+          console.error("ERROR fetch detail:", err);
+          setErrorMsg("Gagal mengambil detail store package");
+        } finally {
+          setLoading(false);
+        }
+      }
+      return;
+    }
+
+    setLoadingStoreOptions(true);
+    setLoadingAssetsPool(true);
+
+    if (!activeFetchPromise) {
+      activeFetchPromise = Promise.all([
+        api.get("/stores/options"),
+        api.get("/assets?per_page=1000"),
+      ]).then(([resStores, resAssets]) => {
+        if (resStores.data?.success) {
+          cachedStores = resStores.data.data || [];
+          hasLoadedStores = true;
+        }
+        if (resAssets.data?.success) {
+          cachedAssets = resAssets.data.data?.data || [];
+          hasLoadedAssets = true;
+        }
+        activeFetchPromise = null;
+      }).catch((err) => {
+        activeFetchPromise = null;
+        throw err;
+      });
+    }
+
+    try {
+      await activeFetchPromise;
+      setStores(cachedStores);
+      setAssets(cachedAssets);
+
+      if (editTargetCode) {
+        setLoading(true); // show loader only for details fetch in edit mode
         const resDetail = await api.get(`/store-packages/${editTargetCode}`);
         if (resDetail.data?.success) {
           const detail = resDetail.data.data;
-          
-          // Match store by code
-          const storeOpt = loadedStores.find((s) => s.code === editTargetCode);
+          const storeOpt = cachedStores.find((s) => s.code === editTargetCode);
           if (storeOpt) {
             setSelectedStoreId(storeOpt.id);
-            setStoreQuery("");
           } else {
-            // Fallback object
             const fallbackStore = { id: -1, code: detail.store_code, name: detail.store_name };
-            setStores((prev) => [...prev, fallbackStore]);
+            setStores([...cachedStores, fallbackStore]);
             setSelectedStoreId(-1);
-            setStoreQuery("");
           }
-
-          // Pre-populate asset IDs
-          const ids = detail.assets.map((a: any) => a.id);
-          setSelectedAssetIds(ids);
+          setSelectedAssetIds((detail.assets || []).map((a: any) => a.id));
         }
       }
     } catch (err: any) {
       console.error("Gagal memuat data modal:", err);
       setErrorMsg("Gagal mengambil data referensi dari server.");
     } finally {
+      setLoadingStoreOptions(false);
+      setLoadingAssetsPool(false);
       setLoading(false);
     }
   };
@@ -259,12 +311,14 @@ export default function StorePackageModal({
         await api.put(`/store-packages/${selectedStore.code}`, {
           asset_ids: selectedAssetIds,
         });
+        clearStorePackageDropdownCache();
         onSuccess(`Store Package "${selectedStore.name}" berhasil diperbarui.`);
       } else {
         await api.post("/store-packages", {
           store_code: selectedStore.code,
           asset_ids: selectedAssetIds,
         });
+        clearStorePackageDropdownCache();
         onSuccess(`Store Package "${selectedStore.name}" berhasil dibuat.`);
       }
     } catch (err: any) {
@@ -332,10 +386,15 @@ export default function StorePackageModal({
                     <button
                       type="button"
                       onClick={() => setShowStoreDropdown(!showStoreDropdown)}
-                      className="w-full h-10 px-3 flex items-center justify-between rounded-lg border border-gray-255 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer"
+                      disabled={loadingStoreOptions}
+                      className="w-full h-10 px-3 flex items-center justify-between rounded-lg border border-gray-250 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer disabled:bg-gray-50 disabled:cursor-wait"
                     >
                       <span className={selectedStore ? "text-slate-800 font-semibold" : "text-gray-400"}>
-                        {selectedStore ? `${selectedStore.name} (${selectedStore.code})` : "-- Pilih Store --"}
+                        {loadingStoreOptions
+                          ? "Memuat data store..."
+                          : selectedStore
+                          ? `${selectedStore.name} (${selectedStore.code})`
+                          : "-- Pilih Store --"}
                       </span>
                       <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                     </button>
@@ -369,7 +428,11 @@ export default function StorePackageModal({
                           </div>
 
                           <div className="overflow-y-auto divide-y divide-gray-100 flex-1 max-h-48 bg-white">
-                            {filteredStores.length === 0 ? (
+                            {loadingStoreOptions ? (
+                              <div className="p-3 text-xs text-gray-400 font-medium text-center animate-pulse">
+                                Memuat data store...
+                              </div>
+                            ) : filteredStores.length === 0 ? (
                               <div className="p-3 text-xs text-gray-450 font-medium text-center">
                                 Tidak ada store ditemukan.
                               </div>
@@ -573,7 +636,13 @@ export default function StorePackageModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {filteredAssets.length === 0 ? (
+                      {loadingAssetsPool ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400 animate-pulse font-medium">
+                            Memuat daftar asset...
+                          </td>
+                        </tr>
+                      ) : filteredAssets.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="py-8 text-center text-slate-400">
                             Tidak ada asset yang cocok dengan kriteria.

@@ -36,6 +36,29 @@ class MaintenanceLog extends Model
             ->setDescriptionForEvent(fn(string $eventName) => "Maintenance log has been {$eventName}");
     }
 
+    protected static function booted()
+    {
+        $clearCache = function () {
+            \Illuminate\Support\Facades\Cache::forget('dashboard:index');
+            
+            $keys = \Illuminate\Support\Facades\Cache::get('maintenance:cache_keys', []);
+            foreach ($keys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('maintenance:cache_keys');
+
+            $assetKeys = \Illuminate\Support\Facades\Cache::get('assets:cache_keys', []);
+            foreach ($assetKeys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('assets:cache_keys');
+        };
+
+        static::saved($clearCache);
+        static::deleted($clearCache);
+        static::restored($clearCache);
+    }
+
     public function asset()
     {
         return $this->belongsTo(MasterAsset::class, 'asset_id');

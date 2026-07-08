@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import axios from "axios";
@@ -8,6 +8,7 @@ import { usePolling } from "../../hooks/usePolling";
 import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download, Save, ChevronUp, ChevronDown } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
+import { isListEqual } from "../../utils/equality";
 
 interface Assignment {
   id: number;
@@ -79,13 +80,14 @@ export default function AssignmentList() {
   const [refreshKey, setRefreshKey] = useState(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFetchingRef = useRef(false);
+  const isSilentRef = useRef(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalClosing, setModalClosing] = useState(false);
   const [editTarget, setEditTarget] = useState<Assignment | null>(null);
   const [form, setForm] = useState<AssignmentForm>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const assetSelectRef = useRef<HTMLSelectElement>(null);
+  const assetSelectRef = useRef<HTMLButtonElement>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<Assignment | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -95,9 +97,32 @@ export default function AssignmentList() {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const triggerRefresh = () => setRefreshKey((k) => k + 1);
+  // Custom asset select dropdown states
+  const [showAssetDropdown, setShowAssetDropdown] = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
+  const assetDropdownRef = useRef<HTMLDivElement>(null);
 
-  usePolling(triggerRefresh, 30000, !modalOpen && !deleteTarget);
+  const filteredAssetOptions = useMemo(() => {
+    const q = assetSearch.toLowerCase().trim();
+    if (!q) return assets;
+    return assets.filter(
+      (a) =>
+        a.asset_code?.toLowerCase().includes(q) ||
+        a.asset_name?.toLowerCase().includes(q)
+    );
+  }, [assets, assetSearch]);
+
+  const triggerRefresh = () => {
+    isSilentRef.current = false;
+    setRefreshKey((k) => k + 1);
+  };
+
+  const triggerSilentRefresh = () => {
+    isSilentRef.current = true;
+    setRefreshKey((k) => k + 1);
+  };
+
+  usePolling(triggerSilentRefresh, 30000, !modalOpen && !deleteTarget);
 
   const handleSearchInput = (val: string) => {
     setSearchInput(val);
@@ -108,6 +133,7 @@ export default function AssignmentList() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowDropdown(false);
+      if (assetDropdownRef.current && !assetDropdownRef.current.contains(e.target as Node)) setShowAssetDropdown(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -149,7 +175,9 @@ export default function AssignmentList() {
       if (isFetchingRef.current) return;
       try {
         isFetchingRef.current = true;
-        setLoading(true);
+        if (!isSilentRef.current) {
+          setLoading(true);
+        }
         const params = new URLSearchParams({ page: String(currentPage), per_page: String(rowsPerPage) });
         if (search) params.append("search", search);
         if (filterStatus === "active") params.append("is_active", "1");
@@ -162,9 +190,17 @@ export default function AssignmentList() {
         });
         const payload = res?.data?.data;
         if (payload?.data) {
+          if (isSilentRef.current && isListEqual(assignments, payload.data, ['id', 'updated_at', 'status'])) {
+            isSilentRef.current = false;
+            return;
+          }
           setAssignments(payload.data); setTotalData(payload.total); setTotalPages(payload.last_page);
         } else {
           const data = Array.isArray(payload) ? payload : [];
+          if (isSilentRef.current && isListEqual(assignments, data, ['id', 'updated_at', 'status'])) {
+            isSilentRef.current = false;
+            return;
+          }
           setAssignments(data); setTotalData(data.length); setTotalPages(1);
         }
       } catch (err) {
@@ -175,7 +211,10 @@ export default function AssignmentList() {
         isFetchingRef.current = false;
         if (!controller.signal.aborted) {
           setLoading(false);
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          if (!isSilentRef.current) {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+          isSilentRef.current = false;
         }
       }
     };
@@ -247,6 +286,7 @@ export default function AssignmentList() {
     setModalOpen(false); setEditTarget(null); setForm(emptyForm);
     setModalClosing(false);
     setKaryawanInput(""); setShowDropdown(false); setErrors({});
+    setShowAssetDropdown(false); setAssetSearch("");
   };
 
   const requestCloseModal = () => {
@@ -593,29 +633,91 @@ export default function AssignmentList() {
                   {/* Field: Aset */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Aset <span className="text-red-500">*</span></label>
-                    <select
-                      ref={assetSelectRef}
-                      className={`w-full h-12 border rounded-lg px-3 text-sm bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.asset_id ? "border-red-400" : "border-gray-200"}`}
-                      value={form.asset_id}
-                      onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
-                    >
-                      <option value="">-- Pilih Aset --</option>
-                      {assets.map((a) => {
-                        const isBorrowed = a.status === "borrowed";
-                        const isCurrentAsset = editTarget && String(editTarget.asset_id) === String(a.id);
-                        const disabled = isBorrowed && !isCurrentAsset;
-                        return (
-                          <option
-                            key={a.id}
-                            value={a.id}
-                            disabled={disabled}
-                            style={disabled ? { color: "#9ca3af", backgroundColor: "#f9fafb" } : {}}
-                          >
-                            {a.asset_code} — {a.asset_name}{disabled ? " (Sedang Dipinjam)" : ""}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <div className={`relative ${showAssetDropdown ? "z-30" : "z-10"}`} ref={assetDropdownRef}>
+                      <button
+                        ref={assetSelectRef}
+                        type="button"
+                        onClick={() => {
+                          setShowAssetDropdown(!showAssetDropdown);
+                          setAssetSearch("");
+                        }}
+                        className={`w-full h-12 border rounded-lg px-3 text-sm bg-white text-left flex items-center justify-between transition-all focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.asset_id ? "border-red-400" : "border-gray-200"}`}
+                      >
+                        <span className={form.asset_id ? "text-slate-800" : "text-gray-400"}>
+                          {form.asset_id
+                            ? (() => {
+                                const selected = assets.find((a) => String(a.id) === String(form.asset_id));
+                                return selected ? `${selected.asset_code} — ${selected.asset_name}` : "-- Pilih Aset --";
+                              })()
+                            : "-- Pilih Aset --"}
+                        </span>
+                        {showAssetDropdown ? (
+                          <ChevronUp className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+
+                      {showAssetDropdown && (
+                        <div className="absolute left-0 right-0 mt-1 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg z-50 flex flex-col divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-100">
+                          {/* Search Input inside dropdown */}
+                          <div className="p-2.5 bg-slate-50 sticky top-0 z-10">
+                            <input
+                              type="text"
+                              className="w-full h-9 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
+                              placeholder="Cari kode aset atau nama..."
+                              value={assetSearch}
+                              onChange={(e) => setAssetSearch(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+
+                          <div className="flex flex-col max-h-60 overflow-y-auto divide-y divide-gray-100 no-scrollbar">
+                            {filteredAssetOptions.length === 0 ? (
+                              <div className="px-4 py-3 text-xs text-gray-400 text-center">
+                                Aset tidak ditemukan
+                              </div>
+                            ) : (
+                              filteredAssetOptions.map((a) => {
+                                const isBorrowed = a.status === "borrowed";
+                                const isCurrentAsset = editTarget && String(editTarget.asset_id) === String(a.id);
+                                const disabled = isBorrowed && !isCurrentAsset;
+                                return (
+                                  <button
+                                    key={a.id}
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() => {
+                                      setForm({ ...form, asset_id: String(a.id) });
+                                      setShowAssetDropdown(false);
+                                    }}
+                                    className={`w-full text-left px-4 py-3 text-xs transition flex justify-between items-center ${
+                                      disabled
+                                        ? "bg-gray-50/50 text-gray-400 cursor-not-allowed"
+                                        : String(form.asset_id) === String(a.id)
+                                        ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100/70"
+                                        : "text-slate-700 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className={`font-semibold ${disabled ? "text-gray-400" : String(form.asset_id) === String(a.id) ? "text-emerald-800" : "text-slate-800"}`}>
+                                        {a.asset_code}
+                                      </span>
+                                      <span className="text-[10px] text-gray-400 font-semibold">{a.asset_name}</span>
+                                    </div>
+                                    {disabled && (
+                                      <span className="text-[9px] font-bold px-2 py-0.5 bg-red-50 text-red-500 rounded-full border border-red-100">
+                                        Sedang Dipinjam
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     {errors.asset_id && <p className="text-red-500 text-xs mt-1">{errors.asset_id}</p>}
                   </div>
 

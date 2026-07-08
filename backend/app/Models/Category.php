@@ -27,6 +27,7 @@ class Category extends Model
     {
         $clearCache = function () {
             \Illuminate\Support\Facades\Cache::forget('dashboard:index');
+            \Illuminate\Support\Facades\Cache::forget('category:cat-tas:id');
             
             $keys = \Illuminate\Support\Facades\Cache::get('categories:cache_keys', []);
             foreach ($keys as $key) {

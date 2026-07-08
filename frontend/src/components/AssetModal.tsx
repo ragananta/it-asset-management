@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import api from "../api/axios";
-import { Check, Loader2, Package, X, Plus, Pencil, Save } from "lucide-react";
+import { Check, Loader2, Package, X, Plus, Pencil, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { DatePicker } from "./ui/date-picker";
 
 const toDateInput = (val?: string | null): string => {
@@ -102,7 +102,44 @@ export default function AssetModal({
   const [generatingCode, setGeneratingCode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [modalClosing, setModalClosing] = useState(false);
-  const categorySelectRef = useRef<HTMLSelectElement>(null);
+  const categorySelectRef = useRef<HTMLButtonElement>(null);
+
+  // Custom dropdown states
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [showConditionDropdown, setShowConditionDropdown] = useState(false);
+  const conditionDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.toLowerCase().trim();
+    if (!q) return categories;
+    return categories.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.code && c.code.toLowerCase().includes(q))
+    );
+  }, [categories, categorySearch]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setShowCategoryDropdown(false);
+      }
+      if (conditionDropdownRef.current && !conditionDropdownRef.current.contains(e.target as Node)) {
+        setShowConditionDropdown(false);
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setShowStatusDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const isEdit = !!editAsset;
   const selectedCategory = categories.find((c) => String(c.id) === form.category_id);
@@ -134,6 +171,10 @@ export default function AssetModal({
     setGeneratingCode(false);
     setSaving(false);
     setModalClosing(false);
+    setShowCategoryDropdown(false);
+    setCategorySearch("");
+    setShowConditionDropdown(false);
+    setShowStatusDropdown(false);
   }, [open, editAsset, isEdit]);
 
   useEffect(() => {
@@ -331,20 +372,79 @@ export default function AssetModal({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Field label="Kategori" required error={errors.category_id || errors.category_name}>
-                <select
-                  ref={categorySelectRef}
-                  className={inputClass(errors.category_id || errors.category_name)}
-                  value={form.category_id}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  disabled={saving}
-                >
-                  <option value="">Pilih kategori terlebih dahulu</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={String(c.id)}>
-                      {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
+                <div className="relative" ref={categoryDropdownRef}>
+                  <button
+                    ref={categorySelectRef}
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setShowCategoryDropdown(!showCategoryDropdown);
+                      setCategorySearch("");
+                    }}
+                    className={`${inputClass(errors.category_id || errors.category_name)} text-left flex items-center justify-between bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15`}
+                  >
+                    <span className={form.category_id ? "text-slate-800" : "text-gray-400"}>
+                      {form.category_id
+                        ? (() => {
+                            const selected = categories.find((c) => String(c.id) === String(form.category_id));
+                            return selected ? `${selected.name} (${selected.code})` : "Pilih kategori terlebih dahulu";
+                          })()
+                        : "Pilih kategori terlebih dahulu"}
+                    </span>
+                    {showCategoryDropdown ? (
+                      <ChevronUp className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+
+                  {showCategoryDropdown && (
+                    <div className="absolute left-0 right-0 mt-1 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg z-50 flex flex-col divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-100">
+                      {/* Search Input inside dropdown */}
+                      <div className="p-2.5 bg-slate-50 sticky top-0 z-10">
+                        <input
+                          type="text"
+                          className="w-full h-9 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
+                          placeholder="Cari kategori..."
+                          value={categorySearch}
+                          onChange={(e) => setCategorySearch(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+
+                      <div className="flex flex-col max-h-60 overflow-y-auto divide-y divide-gray-100 no-scrollbar">
+                        {filteredCategories.length === 0 ? (
+                          <div className="px-4 py-3 text-xs text-gray-400 text-center">
+                            Kategori tidak ditemukan
+                          </div>
+                        ) : (
+                          filteredCategories.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                handleCategoryChange(String(c.id));
+                                setShowCategoryDropdown(false);
+                              }}
+                              className={`w-full text-left px-4 py-3.5 text-xs transition flex flex-col gap-0.5 ${
+                                String(form.category_id) === String(c.id)
+                                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100/70"
+                                  : "text-slate-700 hover:bg-slate-50"
+                              }`}
+                            >
+                              <span className={`font-semibold ${String(form.category_id) === String(c.id) ? "text-emerald-800" : "text-slate-800"}`}>
+                                {c.name}
+                              </span>
+                              {c.code && (
+                                <span className="text-[10px] text-gray-400 font-semibold">{c.code}</span>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </Field>
 
               <Field
@@ -442,27 +542,105 @@ export default function AssetModal({
               </Field>
 
               <Field label="Kondisi" required error={errors.condition_status}>
-                <select
-                  className={inputClass(errors.condition_status)}
-                  value={form.condition_status}
-                  onChange={(e) => set("condition_status", e.target.value)}
-                >
-                  <option value="good">Good</option>
-                  <option value="damaged">Damaged</option>
-                  <option value="under_maintenance">Maintenance</option>
-                </select>
+                <div className="relative" ref={conditionDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowConditionDropdown(!showConditionDropdown)}
+                    className={`${inputClass(errors.condition_status)} text-left flex items-center justify-between bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15`}
+                  >
+                    <span className="text-slate-800">
+                      {form.condition_status === "good"
+                        ? "Good"
+                        : form.condition_status === "damaged"
+                        ? "Damaged"
+                        : form.condition_status === "under_maintenance"
+                        ? "Maintenance"
+                        : "Good"}
+                    </span>
+                    {showConditionDropdown ? (
+                      <ChevronUp className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+
+                  {showConditionDropdown && (
+                    <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 flex flex-col divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-100">
+                      {[
+                        { value: "good", label: "Good" },
+                        { value: "damaged", label: "Damaged" },
+                        { value: "under_maintenance", label: "Maintenance" },
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => {
+                            set("condition_status", item.value);
+                            setShowConditionDropdown(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 text-xs transition ${
+                            form.condition_status === item.value
+                              ? "bg-emerald-50 text-emerald-700 font-semibold hover:bg-emerald-100/70"
+                              : "text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </Field>
 
               <Field label="Status" required error={errors.status}>
-                <select
-                  className={inputClass(errors.status)}
-                  value={form.status}
-                  onChange={(e) => set("status", e.target.value)}
-                >
-                  <option value="active">Aktif</option>
-                  <option value="borrowed">Dipinjam</option>
-                  <option value="disposed">Disposed</option>
-                </select>
+                <div className="relative" ref={statusDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                    className={`${inputClass(errors.status)} text-left flex items-center justify-between bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15`}
+                  >
+                    <span className="text-slate-800">
+                      {form.status === "active"
+                        ? "Aktif"
+                        : form.status === "borrowed"
+                        ? "Dipinjam"
+                        : form.status === "disposed"
+                        ? "Disposed"
+                        : "Aktif"}
+                    </span>
+                    {showStatusDropdown ? (
+                      <ChevronUp className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+
+                  {showStatusDropdown && (
+                    <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 flex flex-col divide-y divide-gray-100 animate-in fade-in slide-in-from-top-1 duration-100">
+                      {[
+                        { value: "active", label: "Aktif" },
+                        { value: "borrowed", label: "Dipinjam" },
+                        { value: "disposed", label: "Disposed" },
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => {
+                            set("status", item.value);
+                            setShowStatusDropdown(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 text-xs transition ${
+                            form.status === item.value
+                              ? "bg-emerald-50 text-emerald-700 font-semibold hover:bg-emerald-100/70"
+                              : "text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </Field>
 
               <div className="md:col-span-2">

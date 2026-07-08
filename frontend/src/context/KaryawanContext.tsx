@@ -25,23 +25,30 @@ export function KaryawanProvider({ children }: { children: ReactNode }) {
   const [karyawanList, setKaryawanList] = useState<Karyawan[]>([]);
   const [loadingKaryawan, setLoadingKaryawan] = useState(false);
   const fetched = useRef(false);
-  const fetchingRef = useRef(false);
+  const activePromiseRef = useRef<Promise<void> | null>(null);
 
   const ensureKaryawan = useCallback(async () => {
-    if (fetched.current || fetchingRef.current) return;
-    try {
-      fetchingRef.current = true;
-      setLoadingKaryawan(true);
-      const res = await api.get("/karyawan?limit=200");
-      const data = res?.data?.data || [];
-      setKaryawanList(Array.isArray(data) ? data : []);
-      fetched.current = true;
-    } catch (err) {
-      console.error("ERROR fetch karyawan:", err);
-    } finally {
-      setLoadingKaryawan(false);
-      fetchingRef.current = false;
+    if (fetched.current) return;
+    if (activePromiseRef.current) {
+      return activePromiseRef.current;
     }
+
+    activePromiseRef.current = (async () => {
+      try {
+        setLoadingKaryawan(true);
+        const res = await api.get("/karyawan?limit=200");
+        const data = res?.data?.data || [];
+        setKaryawanList(Array.isArray(data) ? data : []);
+        fetched.current = true;
+      } catch (err) {
+        console.error("ERROR fetch karyawan:", err);
+      } finally {
+        setLoadingKaryawan(false);
+        activePromiseRef.current = null;
+      }
+    })();
+
+    return activePromiseRef.current;
   }, []);
 
   return (

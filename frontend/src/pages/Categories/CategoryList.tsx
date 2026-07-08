@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import { Search, Plus, Pencil, Trash2, X, Check, Tag, Save, ChevronDown, ChevronUp } from "lucide-react";
-import { usePolling } from "../../hooks/usePolling";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 
@@ -79,13 +78,7 @@ export default function CategoryList() {
     setRefreshKey((k) => k + 1);
   };
 
-  const triggerSilentRefresh = () => {
-    isSilentRef.current = true;
-    setRefreshKey((k) => k + 1);
-  };
 
-  // ── Auto refresh setiap 120 detik ─────────────────────────────────────────
-  usePolling(triggerSilentRefresh, 120000, !modalOpen && !deleteTarget);
 
   // ── Debounce search ───────────────────────────────────────────────────────
   const handleSearchInput = (val: string) => {

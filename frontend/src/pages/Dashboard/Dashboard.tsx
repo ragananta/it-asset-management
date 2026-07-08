@@ -70,6 +70,20 @@ const formatLastSync = (date: Date | null) => {
   return `${d} ${m} ${y} ${hh}:${mm}`;
 };
 
+const isDashboardEqual = (a: DashboardData | null, b: DashboardData | null): boolean => {
+  if (!a || !b) return false;
+  if (!a.stats || !b.stats || !a.ploting_device_stats || !b.ploting_device_stats) return false;
+
+  return (
+    a.stats.total_assets === b.stats.total_assets &&
+    a.stats.total_borrowed === b.stats.total_borrowed &&
+    a.stats.maintenance === b.stats.maintenance &&
+    a.ploting_device_stats.total === b.ploting_device_stats.total &&
+    a.ploting_device_stats.borrowed === b.ploting_device_stats.borrowed &&
+    a.ploting_device_stats.maintenance === b.ploting_device_stats.maintenance
+  );
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { karyawanList, ensureKaryawan, loadingKaryawan } = useKaryawan();
@@ -133,15 +147,25 @@ export default function Dashboard() {
         }
 
         const res = await api.get("/dashboard", { noCache: true } as any);
+        const newData = res?.data?.data || null;
+
         if (!cancelled) {
-          setData(res?.data?.data || null);
-          setLastSync(new Date());
+          if (!(isSilentRef.current && isDashboardEqual(data, newData))) {
+            setData(newData);
+            setLastSync(new Date());
+          }
+          setLoading(false);
         }
 
-        await ensureKaryawan();
-
-        const activeAssignments = await fetchAllActiveAssignments();
-        if (!cancelled) setAssignments(activeAssignments);
+        // Load Karyawan and Assignments concurrently in background
+        const [_, activeAssignments] = await Promise.all([
+          ensureKaryawan(),
+          fetchAllActiveAssignments(),
+        ]);
+        
+        if (!cancelled) {
+          setAssignments(activeAssignments);
+        }
       } catch (err) {
         console.error("ERROR fetch dashboard data:", err);
       } finally {

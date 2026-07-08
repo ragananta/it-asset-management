@@ -26,7 +26,7 @@ class KaryawanService
             throw new \Exception('Karyawan API URL is not configured in services config.');
         }
 
-        return Cache::remember('karyawan_list', 300, function () {
+        return Cache::remember('karyawan_list', 86400, function () {
             $response = Http::timeout(10)->get($this->url);
 
             if (!$response->successful()) {

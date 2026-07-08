@@ -33,6 +33,20 @@ class Location extends Model
             ->setDescriptionForEvent(fn(string $eventName) => "Location has been {$eventName}");
     }
 
+    protected static function booted()
+    {
+        $clearCache = function () {
+            $keys = \Illuminate\Support\Facades\Cache::get('locations:cache_keys', []);
+            foreach ($keys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('locations:cache_keys');
+        };
+
+        static::saved($clearCache);
+        static::deleted($clearCache);
+    }
+
     // Relationships
     public function assets()
     {

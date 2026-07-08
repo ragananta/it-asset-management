@@ -7,6 +7,7 @@ import AssetModal from "../../components/AssetModal";
 import TablePagination from "../../components/pagination/TablePagination";
 import { usePolling } from "@/hooks/usePolling";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
+import { isListEqual } from "../../utils/equality";
 
 interface Category { id: number; name: string; code: string; }
 interface Asset {
@@ -177,12 +178,20 @@ export default function AssetList() {
 
         const payload = res?.data?.data;
         if (payload?.data) {
+          if (isSilentRef.current && isListEqual(assets, payload.data, ['id', 'updated_at', 'status', 'condition_status'])) {
+            isSilentRef.current = false;
+            return;
+          }
           setAssets(payload.data);
           const fallbackTotal = currentPage * rowsPerPage + (payload.next_page_url ? rowsPerPage : 0);
           setTotalData(payload.total ?? fallbackTotal);
           setTotalPages(payload.last_page ?? (payload.next_page_url ? currentPage + 1 : currentPage));
         } else {
           const data = Array.isArray(payload) ? payload : [];
+          if (isSilentRef.current && isListEqual(assets, data, ['id', 'updated_at', 'status', 'condition_status'])) {
+            isSilentRef.current = false;
+            return;
+          }
           setAssets(data);
           setTotalData(data.length);
           setTotalPages(1);

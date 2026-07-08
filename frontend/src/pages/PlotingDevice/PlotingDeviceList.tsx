@@ -4,8 +4,6 @@ import api from "../../api/axios";
 import { Search, Plus, Pencil, Trash2, X, Save, Eye, Smartphone, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
-import { usePolling } from "../../hooks/usePolling";
-
 interface Asset {
   id: number;
   asset_name: string;
@@ -83,8 +81,14 @@ export default function PlotingDeviceList() {
   // Data states
   const [plotingDevices, setPlotingDevices] = useState<PlotingDevice[]>([]);
   const [assetsPool, setAssetsPool] = useState<Asset[]>([]);
-  const [storeOptions, setStoreOptions] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [storeOptions, setStoreOptions] = useState<{ id: number; name: string }[]>([]);
+
+  // Lazy Loading Dropdown States
+  const [loadingAssetsPool, setLoadingAssetsPool] = useState(false);
+  const [loadingStoreOptions, setLoadingStoreOptions] = useState(false);
+  const [hasLoadedAssetsPool, setHasLoadedAssetsPool] = useState(false);
+  const [hasLoadedStoreOptions, setHasLoadedStoreOptions] = useState(false);
 
   // Filters & Pagination states
   const initialSearch = searchParams.get("search") || "";
@@ -184,13 +188,7 @@ export default function PlotingDeviceList() {
     setRefreshKey((k) => k + 1);
   };
 
-  const triggerSilentRefresh = () => {
-    isSilentRef.current = true;
-    setRefreshKey((k) => k + 1);
-  };
 
-  // Auto-refresh every 30s when modal/dialogs are closed
-  usePolling(triggerSilentRefresh, 30000, !modalOpen && !deleteTarget);
 
   useEffect(() => {
     if (!toast) return;
@@ -268,30 +266,36 @@ export default function PlotingDeviceList() {
     };
   }, [currentPage, rowsPerPage, search, statusFilter, storeFilter, sortBy, sortOrder, refreshKey]);
 
-  // Fetch Store Options for Selector
-  useEffect(() => {
-    let active = true;
-    api.get("/stores/options")
-      .then((res) => {
-        if (!active) return;
-        setStoreOptions(res?.data?.data || []);
-      })
-      .catch((err) => console.error("ERROR fetch store options:", err));
-    return () => { active = false; };
-  }, [refreshKey]);
+  // Load Store Options lazily
+  const loadStoreOptions = async () => {
+    if (hasLoadedStoreOptions || loadingStoreOptions) return;
+    setLoadingStoreOptions(true);
+    try {
+      const res = await api.get("/stores/options");
+      setStoreOptions(res?.data?.data || []);
+      setHasLoadedStoreOptions(true);
+    } catch (err) {
+      console.error("ERROR fetch store options:", err);
+    } finally {
+      setLoadingStoreOptions(false);
+    }
+  };
 
-  // Fetch Assets Pool for Selector (limit=1000 to get options)
-  useEffect(() => {
-    let active = true;
-    api.get("/assets?per_page=1000")
-      .then((res) => {
-        if (!active) return;
-        const data = res?.data?.data?.data || [];
-        setAssetsPool(data);
-      })
-      .catch((err) => console.error("ERROR fetch assets pool:", err));
-    return () => { active = false; };
-  }, [refreshKey]);
+  // Load Assets Pool lazily
+  const loadAssetsPool = async () => {
+    if (hasLoadedAssetsPool || loadingAssetsPool) return;
+    setLoadingAssetsPool(true);
+    try {
+      const res = await api.get("/assets?per_page=1000");
+      const data = res?.data?.data?.data || [];
+      setAssetsPool(data);
+      setHasLoadedAssetsPool(true);
+    } catch (err) {
+      console.error("ERROR fetch assets pool:", err);
+    } finally {
+      setLoadingAssetsPool(false);
+    }
+  };
 
   // Filter pool of assets that are available for container contents
   const getAvailableAssets = () => {
@@ -313,9 +317,13 @@ export default function PlotingDeviceList() {
     setErrors({});
     setEditTarget(null);
     setModalOpen(true);
+    loadStoreOptions();
+    loadAssetsPool();
   };
 
   const openEdit = (target: PlotingDevice) => {
+    loadStoreOptions();
+    loadAssetsPool();
     api.get(`/ploting-devices/${target.id}`)
       .then((res) => {
         const fullDetail = res?.data?.data;
@@ -364,6 +372,9 @@ export default function PlotingDeviceList() {
         setCurrentPage(1);
       }
       setModalOpen(false);
+      // Invalidate dropdown caches
+      setHasLoadedStoreOptions(false);
+      setHasLoadedAssetsPool(false);
       triggerRefresh();
     } catch (err: any) {
       if (err?.response?.data?.errors) {
@@ -387,6 +398,9 @@ export default function PlotingDeviceList() {
       await api.delete(`/ploting-devices/${deleteTarget.id}`);
       setToast("Asset Package berhasil dihapus");
       setDeleteTarget(null);
+      // Invalidate dropdown caches
+      setHasLoadedStoreOptions(false);
+      setHasLoadedAssetsPool(false);
       triggerRefresh();
     } catch (err: any) {
       console.error("ERROR delete:", err);
@@ -493,7 +507,13 @@ export default function PlotingDeviceList() {
           <div className="relative w-full sm:w-48">
             <button
               type="button"
-              onClick={() => setShowStoreFilterDropdown(!showStoreFilterDropdown)}
+              onClick={() => {
+                const nextState = !showStoreFilterDropdown;
+                setShowStoreFilterDropdown(nextState);
+                if (nextState) {
+                  loadStoreOptions();
+                }
+              }}
               className="w-full h-10 px-5 flex items-center justify-between rounded-full border border-gray-250 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer"
             >
               <span className={storeFilter ? "text-slate-800 font-semibold" : "text-gray-400"}>
@@ -783,10 +803,11 @@ export default function PlotingDeviceList() {
                       <button
                         type="button"
                         onClick={() => setTasDropdownOpen(!tasDropdownOpen)}
-                        className="w-full h-10 px-3 flex items-center justify-between rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer"
+                        disabled={loadingAssetsPool}
+                        className="w-full h-10 px-3 flex items-center justify-between rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer disabled:bg-gray-50 disabled:cursor-wait"
                       >
                         <span className={selectedTas ? "text-gray-800 font-medium" : "text-gray-400"}>
-                          {selectedTas ? `${selectedTas.asset_code} - ${selectedTas.asset_name}` : "-- Pilih Tas --"}
+                          {loadingAssetsPool ? "Memuat..." : (selectedTas ? `${selectedTas.asset_code} - ${selectedTas.asset_name}` : "-- Pilih Tas --")}
                         </span>
                         <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                       </button>
@@ -815,7 +836,11 @@ export default function PlotingDeviceList() {
                           </div>
 
                           <div className="overflow-y-auto divide-y divide-gray-100 flex-1 bg-white">
-                            {filteredTas.length === 0 ? (
+                            {loadingAssetsPool ? (
+                              <div className="py-4 text-center text-xs text-gray-450 font-medium animate-pulse">
+                                Memuat data tas...
+                              </div>
+                            ) : filteredTas.length === 0 ? (
                               <div className="py-4 text-center text-xs text-gray-450 font-medium">
                                 Tidak ada tas yang cocok
                               </div>
@@ -855,10 +880,11 @@ export default function PlotingDeviceList() {
                     <button
                       type="button"
                       onClick={() => setStoreDropdownOpen(!storeDropdownOpen)}
-                      className="w-full h-10 px-3 flex items-center justify-between rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer"
+                      disabled={loadingStoreOptions}
+                      className="w-full h-10 px-3 flex items-center justify-between rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer disabled:bg-gray-50 disabled:cursor-wait"
                     >
                       <span className={selectedStore ? "text-gray-800 font-medium" : "text-gray-400"}>
-                        {selectedStore ? selectedStore.name : "-- Pilih Store --"}
+                        {loadingStoreOptions ? "Memuat..." : (selectedStore ? selectedStore.name : "-- Pilih Store --")}
                       </span>
                       <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                     </button>
@@ -887,7 +913,11 @@ export default function PlotingDeviceList() {
                         </div>
 
                         <div className="overflow-y-auto divide-y divide-gray-100 flex-1 bg-white">
-                          {filteredStores.length === 0 ? (
+                          {loadingStoreOptions ? (
+                            <div className="py-4 text-center text-xs text-gray-450 font-medium animate-pulse">
+                              Memuat data store...
+                            </div>
+                          ) : filteredStores.length === 0 ? (
                             <div className="py-4 text-center text-xs text-gray-450 font-medium">
                               Tidak ada store yang cocok
                             </div>
@@ -951,8 +981,13 @@ export default function PlotingDeviceList() {
                       </div>
                     </div>
                     <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 bg-white">
-                      {availableAssets
-                        .filter((asset) => {
+                      {loadingAssetsPool ? (
+                        <div className="py-8 text-center text-gray-400 text-xs font-medium animate-pulse">
+                          Memuat daftar asset...
+                        </div>
+                      ) : (
+                        availableAssets
+                          .filter((asset) => {
                           const query = assetSearchQuery.trim().toLowerCase();
                           if (!query) return true;
                           return (
@@ -1031,7 +1066,8 @@ export default function PlotingDeviceList() {
                               </div>
                             </label>
                           );
-                        })}
+                        })
+                      )}
                       {availableAssets.length > 0 && availableAssets.filter((asset) => {
                         const query = assetSearchQuery.trim().toLowerCase();
                         if (!query) return true;

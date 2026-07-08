@@ -88,9 +88,13 @@ class PlotingDeviceController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = MasterAsset::whereHas('category', function ($q) {
-                $q->where('code', 'CAT-TAS');
-            })->withCount('containedAssets');
+            $categoryId = Cache::remember(
+                'category:cat-tas:id',
+                86400,
+                fn() => \App\Models\Category::where('code', 'CAT-TAS')->value('id')
+            );
+
+            $query = MasterAsset::where('category_id', $categoryId)->withCount('containedAssets');
 
             if ($request->filled('store_id')) {
                 $query->where('store_id', $request->store_id);

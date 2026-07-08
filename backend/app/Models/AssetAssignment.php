@@ -38,6 +38,12 @@ class AssetAssignment extends Model
                 \Illuminate\Support\Facades\Cache::forget($key);
             }
             \Illuminate\Support\Facades\Cache::forget('assignments:cache_keys');
+
+            $assetKeys = \Illuminate\Support\Facades\Cache::get('assets:cache_keys', []);
+            foreach ($assetKeys as $key) {
+                \Illuminate\Support\Facades\Cache::forget($key);
+            }
+            \Illuminate\Support\Facades\Cache::forget('assets:cache_keys');
         };
 
         static::saved($clearCache);

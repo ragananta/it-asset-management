@@ -6,6 +6,7 @@ import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { usePolling } from "@/hooks/usePolling";
 import { DatePicker } from "../../components/ui/date-picker";
+import { isListEqual } from "../../utils/equality";
 
 interface User {
   id: number;
@@ -235,11 +236,19 @@ export default function ActivityLogList() {
 
         const payload = res?.data?.data;
         if (payload?.data) {
+          if (isSilentRef.current && isListEqual(logs, payload.data, ['id'])) {
+            isSilentRef.current = false;
+            return;
+          }
           setLogs(payload.data);
           setTotalData(payload.total);
           setTotalPages(payload.last_page);
         } else {
           const data = Array.isArray(payload) ? payload : [];
+          if (isSilentRef.current && isListEqual(logs, data, ['id'])) {
+            isSilentRef.current = false;
+            return;
+          }
           setLogs(data);
           setTotalData(data.length);
           setTotalPages(1);
