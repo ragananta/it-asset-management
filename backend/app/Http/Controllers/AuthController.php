@@ -5,12 +5,25 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Log;
 use App\Traits\ApiResponse;
+use App\Services\AuthenticationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\JsonResponse;
 
 class AuthController extends Controller
 {
     use ApiResponse;
+
+    protected AuthenticationService $authService;
+
+    /**
+     * Create a new controller instance.
+     */
+    public function __construct(AuthenticationService $authService)
+    {
+        $this->authService = $authService;
+    }
 
     // ✅ REGISTER
     public function register(Request $request)
@@ -52,27 +65,58 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $result = $this->authService->authenticate(
+            $request->email,
+            $request->password,
+            'it-asset-token',
+            'frontend',
+            $request->ip(),
+            $request->userAgent()
+        );
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return $this->errorResponse('Email atau password salah', 401);
+        if (!$result['success']) {
+            return $this->errorResponse($result['message'], 401);
         }
 
-        // Generate token baru tanpa menghapus token aktif lain
-        $token = $user->createToken('it-asset-token')->plainTextToken;
+        return $this->successResponse([
+            'user'  => $result['user'],
+            'token' => $result['token'],
+        ], 'Login berhasil');
+    }
 
-        // ✅ LOG LOGIN — pakai tabel logs
-        Log::create([
-            'user_id'     => $user->id,
-            'activity'    => 'login',
-            'description' => "User '{$user->name}' berhasil login",
-            'ip_address'  => $request->ip(),
-            'user_agent'  => $request->userAgent(),
+    /**
+     * GET /auth
+     * SATS / Saloka Integration Login Endpoint
+     */
+    public function integrationLogin(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->query(), [
+            'email'    => 'required|email',
+            'password' => 'required',
         ]);
 
+        if ($validator->fails()) {
+            return $this->validationErrorResponse($validator->errors(), 'Validation error');
+        }
+
+        $tokenName = config('services.saloka.token_name', 'saloka-token');
+
+        $result = $this->authService->authenticate(
+            $request->query('email'),
+            $request->query('password'),
+            $tokenName,
+            'saloka',
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        if (!$result['success']) {
+            return $this->errorResponse($result['message'], 401);
+        }
+
         return $this->successResponse([
-            'user'  => $user,
-            'token' => $token,
+            'user'  => $result['user'],
+            'token' => $result['token'],
         ], 'Login berhasil');
     }
 

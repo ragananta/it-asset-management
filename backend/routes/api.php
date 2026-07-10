@@ -95,7 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Stores Options
     Route::get('/stores/options', [PlotingDeviceController::class, 'storeOptions']);
-
+    
     // Ploting Devices CRUD & Timeline
     Route::get('/ploting-devices/scan/{asset_code}', [PlotingDeviceController::class, 'scan']);
     Route::get('/ploting-devices/{id}/timeline', [PlotingDeviceController::class, 'timeline']);
@@ -112,3 +112,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/fonnte/send', [\App\Http\Controllers\FonnteController::class, 'send']);
 
 });
+
+// ═══════════════════════════════════════════════
+// SATS INTEGRATION LAYER (API Key Protected)
+// ═══════════════════════════════════════════════
+Route::prefix('integrations/sats')
+    ->middleware([
+        \App\Http\Middleware\CheckApiKey::class,
+        \App\Http\Middleware\LogSatsRequest::class,
+        'throttle:sats_integration',
+    ])
+    ->group(function () {
+        Route::get('/ploting-devices', [\App\Http\Controllers\SatsIntegrationController::class, 'plotingDevices']);
+        Route::get('/ploting-devices/scan/{asset_code}', [\App\Http\Controllers\SatsIntegrationController::class, 'scanPlotingDevice']);
+        Route::get('/stores', [\App\Http\Controllers\SatsIntegrationController::class, 'stores']);
+        Route::get('/store-packages/{store_code}', [\App\Http\Controllers\SatsIntegrationController::class, 'storePackage']);
+        Route::get('/assets/lookup/{asset_code}', [\App\Http\Controllers\SatsIntegrationController::class, 'assetLookup']);
+    });

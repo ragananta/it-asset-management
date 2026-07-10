@@ -43,4 +43,13 @@ return [
         'url' => env('STORE_API_URL'),
     ],
 
+    'sats' => [
+        'api_key' => env('SATS_API_KEY'),
+        'rate_limit' => env('SATS_RATE_LIMIT', 60),
+    ],
+
+    'saloka' => [
+        'token_name' => env('SALOKA_TOKEN_NAME', 'saloka-token'),
+    ],
+
 ];
