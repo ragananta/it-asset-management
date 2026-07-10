@@ -21,6 +21,7 @@ const PlotingDeviceList = lazy(() => import("./pages/PlotingDevice/PlotingDevice
 const PlotingDeviceDetail = lazy(() => import("./pages/PlotingDevice/PlotingDeviceDetail"));
 const StorePackageList = lazy(() => import("./pages/StorePackage/StorePackageList"));
 const StorePackageDetail = lazy(() => import("./pages/StorePackage/StorePackageDetail"));
+const LoginFromSaloka = lazy(() => import("./pages/Auth/LoginFromSaloka"));
 
 // ── Loading fallback ─────────────────────────────────────────────────────────
 function PageLoader() {
@@ -45,6 +46,9 @@ export default function App() {
 
           {/* LOGIN */}
           <Route path="/login" element={<Login />} />
+
+          {/* LOGIN FROM SALOKA */}
+          <Route path="/auth" element={<LoginFromSaloka />} />
 
           {/* PROTECTED AREA */}
           <Route

@@ -84,42 +84,6 @@ class AuthController extends Controller
         ], 'Login berhasil');
     }
 
-    /**
-     * GET /auth
-     * SATS / Saloka Integration Login Endpoint
-     */
-    public function integrationLogin(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->query(), [
-            'email'    => 'required|email',
-            'password' => 'required',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->validationErrorResponse($validator->errors(), 'Validation error');
-        }
-
-        $tokenName = config('services.saloka.token_name', 'saloka-token');
-
-        $result = $this->authService->authenticate(
-            $request->query('email'),
-            $request->query('password'),
-            $tokenName,
-            'saloka',
-            $request->ip(),
-            $request->userAgent()
-        );
-
-        if (!$result['success']) {
-            return $this->errorResponse($result['message'], 401);
-        }
-
-        return $this->successResponse([
-            'user'  => $result['user'],
-            'token' => $result['token'],
-        ], 'Login berhasil');
-    }
-
     // ✅ LOGOUT
     public function logout(Request $request)
     {
