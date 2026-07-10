@@ -94,6 +94,7 @@ export default function StorePackageModal({
   // Load basic data
   useEffect(() => {
     if (isOpen) {
+      clearStorePackageDropdownCache();
       loadData();
     }
   }, [isOpen, editTargetCode]);
@@ -219,12 +220,29 @@ export default function StorePackageModal({
 
       const matchesStatus = !statusFilter || asset.status === statusFilter;
 
-      // Exclude retired and disposed assets
       const isActive = asset.status !== "disposed" && asset.condition_status !== "retired";
 
-      return matchesSearch && matchesCategory && matchesStatus && isActive;
+      // Check if it belongs to the current store package being edited
+      const belongsToCurrentPackage =
+        editMode &&
+        editTargetCode &&
+        asset.store_package &&
+        asset.store_package.store_code === editTargetCode;
+
+      if (belongsToCurrentPackage) {
+        return matchesSearch && matchesCategory && matchesStatus;
+      }
+
+      // Otherwise, the asset must satisfy availability rules:
+      const isNotBorrowed = asset.status !== "borrowed";
+      const isNotAssignedToOtherStore = !asset.store_package;
+      const isNotInTas = !asset.parent_package;
+
+      const isAvailable = isNotBorrowed && isNotAssignedToOtherStore && isNotInTas && isActive;
+
+      return matchesSearch && matchesCategory && matchesStatus && isAvailable;
     });
-  }, [assets, assetQuery, categoryFilter, statusFilter]);
+  }, [assets, assetQuery, categoryFilter, statusFilter, editMode, editTargetCode]);
 
   // Extract unique categories from assets
   const categories = useMemo(() => {
@@ -254,37 +272,12 @@ export default function StorePackageModal({
   };
 
   const allFilteredSelectableSelected = useMemo(() => {
-    const selectables = filteredAssets.filter((a) => {
-      const isAssigned = !!a.store_package;
-      const isThisStore =
-        isAssigned &&
-        selectedStore &&
-        a.store_package!.store_code === selectedStore.code;
-      const isBorrowed = a.status === "borrowed";
-      const isInTas = !!a.parent_package;
-      const isChecked = selectedAssetIds.includes(a.id);
-      const isDisabled = (isAssigned && !isThisStore) || ((isBorrowed || isInTas) && !isChecked);
-      return !isDisabled;
-    });
-    if (selectables.length === 0) return false;
-    return selectables.every((a) => selectedAssetIds.includes(a.id));
-  }, [filteredAssets, selectedAssetIds, selectedStore]);
+    if (filteredAssets.length === 0) return false;
+    return filteredAssets.every((a) => selectedAssetIds.includes(a.id));
+  }, [filteredAssets, selectedAssetIds]);
 
   const handleToggleAllFiltered = () => {
-    const selectables = filteredAssets.filter((a) => {
-      const isAssigned = !!a.store_package;
-      const isThisStore =
-        isAssigned &&
-        selectedStore &&
-        a.store_package!.store_code === selectedStore.code;
-      const isBorrowed = a.status === "borrowed";
-      const isInTas = !!a.parent_package;
-      const isChecked = selectedAssetIds.includes(a.id);
-      const isDisabled = (isAssigned && !isThisStore) || ((isBorrowed || isInTas) && !isChecked);
-      return !isDisabled;
-    });
-
-    const selectableIds = selectables.map((a) => a.id);
+    const selectableIds = filteredAssets.map((a) => a.id);
 
     if (allFilteredSelectableSelected) {
       setSelectedAssetIds((prev) => prev.filter((id) => !selectableIds.includes(id)));
@@ -615,15 +608,7 @@ export default function StorePackageModal({
                             type="checkbox"
                             checked={allFilteredSelectableSelected}
                             onChange={handleToggleAllFiltered}
-                            disabled={!selectedStore || filteredAssets.filter(a => {
-                              const isAssigned = !!a.store_package;
-                              const isThisStore = isAssigned && selectedStore && a.store_package!.store_code === selectedStore.code;
-                              const isBorrowed = a.status === "borrowed";
-                              const isInTas = !!a.parent_package;
-                              const isChecked = selectedAssetIds.includes(a.id);
-                              const isDisabled = (isAssigned && !isThisStore) || ((isBorrowed || isInTas) && !isChecked);
-                              return !isDisabled;
-                            }).length === 0}
+                            disabled={!selectedStore || filteredAssets.length === 0}
                             className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer disabled:opacity-50"
                             title="Pilih Semua / Kosongkan Pilihan (pada filter saat ini)"
                           />
@@ -651,23 +636,20 @@ export default function StorePackageModal({
                       ) : (
                         filteredAssets.map((asset) => {
                           const isChecked = selectedAssetIds.includes(asset.id);
+                          const isBorrowed = asset.status === "borrowed";
+                          const isInTas = !!asset.parent_package;
                           const isAssigned = !!asset.store_package;
                           const isThisStore =
                             isAssigned &&
                             selectedStore &&
                             asset.store_package!.store_code === selectedStore.code;
-                          const isBorrowed = asset.status === "borrowed";
-                          const isInTas = !!asset.parent_package;
-                          const isDisabled = (isAssigned && !isThisStore) || ((isBorrowed || isInTas) && !isChecked);
 
                           return (
                             <tr
                               key={asset.id}
-                              onClick={() => !isDisabled && handleToggleAsset(asset.id)}
+                              onClick={() => handleToggleAsset(asset.id)}
                               className={`transition cursor-pointer ${
-                                isDisabled
-                                  ? "bg-gray-50/50 cursor-not-allowed opacity-50"
-                                  : isChecked
+                                isChecked
                                   ? "bg-teal-50/20"
                                   : "hover:bg-gray-50/40"
                               }`}
@@ -676,7 +658,6 @@ export default function StorePackageModal({
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
-                                  disabled={isDisabled}
                                   onChange={() => {}} // handled by row click
                                   className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
                                 />

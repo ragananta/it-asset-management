@@ -72,6 +72,7 @@ interface AssetModalProps {
   onSuccess: (updatedAsset?: Asset) => void;
   editAsset?: Asset | null;
   categories: Category[];
+  loadingCategories?: boolean;
 }
 
 const EMPTY_FORM = {
@@ -96,6 +97,7 @@ export default function AssetModal({
   onSuccess,
   editAsset,
   categories,
+  loadingCategories = false,
 }: AssetModalProps) {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -376,15 +378,17 @@ export default function AssetModal({
                   <button
                     ref={categorySelectRef}
                     type="button"
-                    disabled={saving}
+                    disabled={saving || loadingCategories}
                     onClick={() => {
                       setShowCategoryDropdown(!showCategoryDropdown);
                       setCategorySearch("");
                     }}
-                    className={`${inputClass(errors.category_id || errors.category_name)} text-left flex items-center justify-between bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15`}
+                    className={`${inputClass(errors.category_id || errors.category_name)} text-left flex items-center justify-between bg-white focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 disabled:bg-gray-50 disabled:cursor-wait`}
                   >
-                    <span className={form.category_id ? "text-slate-800" : "text-gray-400"}>
-                      {form.category_id
+                    <span className={form.category_id || loadingCategories ? "text-slate-800" : "text-gray-400"}>
+                      {loadingCategories
+                        ? "Memuat data..."
+                        : form.category_id
                         ? (() => {
                             const selected = categories.find((c) => String(c.id) === String(form.category_id));
                             return selected ? `${selected.name} (${selected.code})` : "Pilih kategori terlebih dahulu";

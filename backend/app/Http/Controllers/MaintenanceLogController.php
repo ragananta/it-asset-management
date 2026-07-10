@@ -43,6 +43,10 @@ class MaintenanceLogController extends Controller
                 $query->where('status', $request->status);
             }
 
+            if ($request->filled('pic')) {
+                $query->where('pic', $request->pic);
+            }
+
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
@@ -122,8 +126,20 @@ class MaintenanceLogController extends Controller
                 return $this->notFoundResponse('Aset tidak ditemukan');
             }
 
+            $ongoing = MaintenanceLog::where('asset_id', $request->asset_id)
+                ->where('status', 'ongoing')
+                ->exists();
+            if ($ongoing) {
+                return $this->errorResponse('Aset ini sedang dalam maintenance aktif.', 422);
+            }
+
             $log = MaintenanceLog::create($request->validated());
-            $asset->update(['condition_status' => 'under_maintenance']);
+            $newStatus = $log->status ?? 'ongoing';
+            if ($newStatus === 'ongoing') {
+                $asset->update(['condition_status' => 'under_maintenance']);
+            } else {
+                $asset->update(['condition_status' => 'good']);
+            }
             $this->clearMaintenanceCache();
 
             $this->writeLog(
@@ -153,10 +169,21 @@ class MaintenanceLogController extends Controller
                 return $this->errorResponse('Maintenance yang sudah selesai tidak dapat diedit', 422);
             }
 
-            $oldStatus  = $log->status;
             $newStatus  = $request->status ?? $log->status;
+            $newAssetId = (int) ($request->asset_id ?? $log->asset_id);
+
+            if ($newStatus === 'ongoing') {
+                $anotherOngoing = MaintenanceLog::where('asset_id', $newAssetId)
+                    ->where('status', 'ongoing')
+                    ->where('id', '!=', $id)
+                    ->exists();
+                if ($anotherOngoing) {
+                    return $this->errorResponse('Aset tujuan sedang dalam maintenance aktif.', 422);
+                }
+            }
+
+            $oldStatus  = $log->status;
             $oldAssetId = $log->asset_id;
-            $newAssetId = (int) $request->asset_id;
             $assetName  = $log->asset?->asset_name ?? '-';
 
             if ($oldAssetId !== $newAssetId) {
@@ -175,6 +202,31 @@ class MaintenanceLogController extends Controller
                     ->where('id', '!=', $id)->where('status', 'ongoing')->exists();
                 if (!$stillOngoing) {
                     MasterAsset::where('id', $newAssetId)->update(['condition_status' => 'good']);
+                }
+
+                // WhatsApp Notification for Maintenance Completion
+                try {
+                    $activeAssignment = \App\Models\AssetAssignment::where('asset_id', $newAssetId)
+                        ->whereNull('return_date')
+                        ->first();
+
+                    if ($activeAssignment && !empty($activeAssignment->user_name) && !empty($activeAssignment->phone)) {
+                        $assetModel = $log->asset ?? MasterAsset::find($newAssetId);
+                        $assetNameStr = $assetModel?->asset_name ?? '-';
+                        $assetCodeStr = $assetModel?->asset_code ?? '-';
+
+                        \App\Jobs\SendFonnteNotification::dispatch(
+                            type: 'maintenance_completed',
+                            phone: $activeAssignment->phone,
+                            borrowerName: $activeAssignment->user_name,
+                            assetName: $assetNameStr,
+                            assignDate: null,
+                            returnDate: null,
+                            assetCode: $assetCodeStr
+                        );
+                    }
+                } catch (\Exception $ex) {
+                    \Illuminate\Support\Facades\Log::error('Failed to dispatch maintenance completed notification: ' . $ex->getMessage());
                 }
             }
 

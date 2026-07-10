@@ -5,10 +5,13 @@ import axios from "axios";
 import { useAssets } from "../../context/AssetsContext";
 import { useKaryawan } from "../../context/KaryawanContext";
 import { usePolling } from "../../hooks/usePolling";
-import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download, Save, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, UserCheck, Download, Save, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { isListEqual } from "../../utils/equality";
+import TableSkeleton from "../../components/TableSkeleton";
+import EmptyState from "../../components/EmptyState";
+import ExportConfirmationModal from "../../components/ExportConfirmationModal";
 
 interface Assignment {
   id: number;
@@ -44,12 +47,13 @@ const STATUS_OPTIONS = [
 ];
 
 export default function AssignmentList() {
-  const { assets, ensureAssets, refetchAssets } = useAssets();
+  const { assets, ensureAssets, refetchAssets, loadingAssets } = useAssets();
   const { karyawanList, loadingKaryawan, ensureKaryawan } = useKaryawan();
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -91,6 +95,14 @@ export default function AssignmentList() {
 
   const [deleteTarget, setDeleteTarget] = useState<Assignment | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const [karyawanInput, setKaryawanInput] = useState("");
   const [karyawanDropdown, setKaryawanDropdown] = useState<typeof karyawanList>([]);
@@ -103,14 +115,20 @@ export default function AssignmentList() {
   const assetDropdownRef = useRef<HTMLDivElement>(null);
 
   const filteredAssetOptions = useMemo(() => {
+    const available = assets.filter((a) => {
+      const isBorrowed = a.status === "borrowed";
+      const isCurrentAsset = editTarget && String(editTarget.asset_id) === String(a.id);
+      return !isBorrowed || isCurrentAsset;
+    });
+
     const q = assetSearch.toLowerCase().trim();
-    if (!q) return assets;
-    return assets.filter(
+    if (!q) return available;
+    return available.filter(
       (a) =>
         a.asset_code?.toLowerCase().includes(q) ||
         a.asset_name?.toLowerCase().includes(q)
     );
-  }, [assets, assetSearch]);
+  }, [assets, assetSearch, editTarget]);
 
   const triggerRefresh = () => {
     isSilentRef.current = false;
@@ -157,7 +175,7 @@ export default function AssignmentList() {
 
     const focusTimer = window.setTimeout(() => assetSelectRef.current?.focus(), 80);
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestCloseModal();
+      if (e.key === "Escape" && !saving) requestCloseModal();
     };
 
     document.addEventListener("keydown", handleKeyDown);
@@ -166,7 +184,7 @@ export default function AssignmentList() {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [modalOpen]);
+  }, [modalOpen, saving]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -247,6 +265,8 @@ export default function AssignmentList() {
       if (search) params.append("search", search);
       if (filterStatus === "active") params.append("is_active", "1");
       if (filterStatus === "returned") params.append("is_active", "0");
+      if (sortBy) params.append("sort_by", sortBy);
+      if (sortOrder) params.append("sort_order", sortOrder);
       const res = await api.get(`/asset-assignments/export?${params}`, { responseType: "blob" });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
@@ -256,9 +276,10 @@ export default function AssignmentList() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      setToast("Data berhasil diekspor.");
     } catch (err) {
       console.error("ERROR export:", err);
-      alert("Gagal export data");
+      setToast("Gagal export data");
     } finally {
       setExporting(false);
     }
@@ -290,50 +311,54 @@ export default function AssignmentList() {
   };
 
   const requestCloseModal = () => {
-    if (modalClosing) return;
+    if (saving || modalClosing) return;
     setModalClosing(true);
     window.setTimeout(() => closeModal(), 200);
   };
 
   const selectKaryawan = (k: typeof karyawanList[0]) => {
-    setForm((f) => ({ ...f, user_name: k.name }));
+    setForm((f) => ({ ...f, user_name: k.name, phone: k.phone || "" }));
     setKaryawanInput(k.name); setShowDropdown(false);
   };
 
   const handleSave = async () => {
-  try {
-    setErrors({});
-    const payload = {
-      asset_id: Number(form.asset_id), user_name: form.user_name, phone: form.phone,
-      assign_date: form.assign_date, return_date: form.return_date || null, note: form.note || null,
-    };
+    if (saving) return;
+    try {
+      setErrors({});
+      setSaving(true);
+      const payload = {
+        asset_id: Number(form.asset_id), user_name: form.user_name, phone: form.phone,
+        assign_date: form.assign_date, return_date: form.return_date || null, note: form.note || null,
+      };
 
-    closeModal(); 
-
-    if (editTarget) {
-      const res = await api.put(`/asset-assignments/${editTarget.id}`, payload);
-      const updated: Assignment = res?.data?.data || { ...editTarget, ...payload };
-      setAssignments((prev) => prev.map((item) => item.id === editTarget.id ? { ...item, ...updated } : item));
-    } else {
-      await api.post("/asset-assignments", payload);
-      setCurrentPage(1); triggerRefresh();
+      if (editTarget) {
+        const res = await api.put(`/asset-assignments/${editTarget.id}`, payload);
+        const updated: Assignment = res?.data?.data || { ...editTarget, ...payload };
+        setAssignments((prev) => prev.map((item) => item.id === editTarget.id ? { ...item, ...updated } : item));
+        setToast("Data peminjaman berhasil diperbarui");
+      } else {
+        await api.post("/asset-assignments", payload);
+        setCurrentPage(1); triggerRefresh();
+        setToast("Data peminjaman berhasil ditambahkan");
+      }
+      refetchAssets();
+      closeModal();
+    } catch (err: any) {
+      if (err?.response?.data?.errors) {
+        const apiErrors: Record<string, string> = {};
+        Object.entries(err.response.data.errors).forEach(([key, val]) => {
+          apiErrors[key] = Array.isArray(val) ? (val as string[])[0] : String(val);
+        });
+        setErrors(apiErrors);
+      } else if (err?.response?.data?.message) {
+        setErrors({ asset_id: err.response.data.message });
+      }
+    } finally {
+      setSaving(false);
     }
-    refetchAssets();
-  } catch (err: any) {
-    setModalOpen(true);
-    if (err?.response?.data?.errors) {
-      const apiErrors: Record<string, string> = {};
-      Object.entries(err.response.data.errors).forEach(([key, val]) => {
-        apiErrors[key] = Array.isArray(val) ? (val as string[])[0] : String(val);
-      });
-      setErrors(apiErrors);
-    } else if (err?.response?.data?.message) {
-      setErrors({ asset_id: err.response.data.message });
-    }
-  }
-};
+  };
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleting) return;
     const prevAssignments = assignments; const prevTotal = totalData;
     try {
       setDeleting(true);
@@ -343,9 +368,10 @@ export default function AssignmentList() {
       setCurrentPage(newPage);
       await api.delete(`/asset-assignments/${deleteTarget.id}`);
       setDeleteTarget(null);
+      setToast("Data peminjaman berhasil dihapus");
     } catch (err: any) {
       setAssignments(prevAssignments); setTotalData(prevTotal);
-      alert(err?.response?.data?.message || "Gagal menghapus data peminjaman");
+      setToast(err?.response?.data?.message || "Gagal menghapus data peminjaman");
     } finally {
       setDeleting(false);
     }
@@ -400,11 +426,11 @@ export default function AssignmentList() {
           </div>
 
           <button
-            onClick={handleExport} disabled={exporting}
+            onClick={() => setShowExportConfirm(true)} disabled={exporting}
             className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition disabled:opacity-50 w-full sm:w-auto"
           >
             <Download className="w-4 h-4" />
-            {exporting ? "..." : "Export"}
+            {exporting ? "Mengekspor..." : "Export"}
           </button>
 
           <button onClick={openCreate}
@@ -483,11 +509,18 @@ export default function AssignmentList() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={9} className="py-16 text-center text-gray-400">Loading...</td></tr>
+                <TableSkeleton columns={9} rows={rowsPerPage} />
               ) : assignments.length === 0 ? (
-                <tr><td colSpan={9} className="py-16 text-center text-gray-300">
-                  {search ? "Tidak ada data yang cocok" : "Data peminjaman belum tersedia"}
-                </td></tr>
+                <tr>
+                  <td colSpan={9} className="p-0">
+                    <EmptyState
+                      variant="table"
+                      title={search ? "Tidak ada data yang cocok" : "Data peminjaman belum tersedia"}
+                      description={search ? "Coba ubah kata kunci pencarian Anda." : "Data peminjaman akan tampil di sini."}
+                      icon={<UserCheck className="w-8 h-8 text-slate-400" />}
+                    />
+                  </td>
+                </tr>
               ) : (
                 assignments.map((item, idx) => (
                   <tr key={item.id} className={`hover:bg-blue-50/20 transition ${!isActive(item) ? "opacity-60" : ""}`}>
@@ -609,7 +642,8 @@ export default function AssignmentList() {
               <button
                 type="button"
                 onClick={requestCloseModal}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                disabled={saving}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
                 aria-label="Tutup modal"
               >
                 <X className="w-4 h-4" />
@@ -637,14 +671,17 @@ export default function AssignmentList() {
                       <button
                         ref={assetSelectRef}
                         type="button"
+                        disabled={saving || loadingAssets}
                         onClick={() => {
                           setShowAssetDropdown(!showAssetDropdown);
                           setAssetSearch("");
                         }}
-                        className={`w-full h-12 border rounded-lg px-3 text-sm bg-white text-left flex items-center justify-between transition-all focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.asset_id ? "border-red-400" : "border-gray-200"}`}
+                        className={`w-full h-12 border rounded-lg px-3 text-sm bg-white text-left flex items-center justify-between transition-all focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.asset_id ? "border-red-400" : "border-gray-200"} disabled:bg-gray-50 disabled:cursor-wait`}
                       >
-                        <span className={form.asset_id ? "text-slate-800" : "text-gray-400"}>
-                          {form.asset_id
+                        <span className={form.asset_id || loadingAssets ? "text-slate-800 font-semibold" : "text-gray-400"}>
+                          {loadingAssets
+                            ? "Memuat data..."
+                            : form.asset_id
                             ? (() => {
                                 const selected = assets.find((a) => String(a.id) === String(form.asset_id));
                                 return selected ? `${selected.asset_code} — ${selected.asset_name}` : "-- Pilih Aset --";
@@ -726,10 +763,14 @@ export default function AssignmentList() {
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nama Peminjam <span className="text-red-500">*</span></label>
                     <div className={`relative ${showDropdown ? "z-30" : "z-10"}`} ref={dropdownRef}>
                       <input type="text"
-                        className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.user_name ? "border-red-400" : "border-gray-200"}`}
+                        className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.user_name ? "border-red-400" : "border-gray-200"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                         placeholder={loadingKaryawan ? "Memuat data karyawan..." : "Ketik nama karyawan..."}
-                        value={karyawanInput} disabled={loadingKaryawan}
-                        onChange={(e) => { setKaryawanInput(e.target.value); setForm((f) => ({ ...f, user_name: e.target.value })); }}
+                        value={karyawanInput} disabled={saving || loadingKaryawan}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setKaryawanInput(val);
+                          setForm((f) => ({ ...f, user_name: val, phone: val === "" ? "" : f.phone }));
+                        }}
                         onFocus={() => { if (karyawanDropdown.length > 0) setShowDropdown(true); }}
                       />
                       {showDropdown && karyawanDropdown.length > 0 && (
@@ -755,7 +796,8 @@ export default function AssignmentList() {
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">No. WhatsApp <span className="text-red-500">*</span></label>
                     <input type="tel"
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.phone ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      disabled={saving}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.phone ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       placeholder="628123456789" value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                     {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
@@ -766,7 +808,8 @@ export default function AssignmentList() {
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tgl Pinjam <span className="text-red-500">*</span></label>
                     <input type="date"
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.assign_date ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      disabled={saving}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.assign_date ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       value={form.assign_date} onChange={(e) => setForm({ ...form, assign_date: e.target.value })} />
                     {errors.assign_date && <p className="text-red-500 text-xs mt-1">{errors.assign_date}</p>}
                   </div>
@@ -775,14 +818,17 @@ export default function AssignmentList() {
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tgl Kembali <span className="text-gray-400 font-normal">(opsional)</span></label>
                     <input type="date"
-                      className="w-full h-12 border border-[#dbe2ea] rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
+                      disabled={saving}
+                      className="w-full h-12 border border-[#dbe2ea] rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 disabled:bg-gray-50 disabled:cursor-not-allowed"
                       value={form.return_date} onChange={(e) => setForm({ ...form, return_date: e.target.value })} />
                   </div>
 
                   {/* Field: Catatan */}
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Catatan <span className="text-gray-400 font-normal">(opsional)</span></label>
-                    <textarea className="w-full min-h-[100px] border border-[#dbe2ea] rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 resize-y"
+                    <textarea
+                      disabled={saving}
+                      className="w-full min-h-[100px] border border-[#dbe2ea] rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 resize-y disabled:bg-gray-50 disabled:cursor-not-allowed"
                       placeholder="Keterangan tambahan..." rows={3} value={form.note}
                       onChange={(e) => setForm({ ...form, note: e.target.value })} />
                   </div>
@@ -794,16 +840,18 @@ export default function AssignmentList() {
             <div className="sticky bottom-0 bg-white px-7 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
               <button
                 onClick={requestCloseModal}
-                className="h-10 px-6 text-sm font-semibold text-white bg-red-500 hover:bg-red-650 rounded-full transition shadow-sm"
+                disabled={saving}
+                className="h-10 px-6 text-sm font-semibold text-white bg-red-500 hover:bg-red-650 rounded-full transition shadow-sm disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 onClick={handleSave}
-                className="h-10 px-6 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-full transition flex items-center gap-2 shadow-sm"
+                disabled={saving}
+                className="h-10 px-6 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-full transition flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="w-4 h-4" />
-                Simpan
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? "Menyimpan..." : "Simpan"}
               </button>
             </div>
           </div>
@@ -814,7 +862,7 @@ export default function AssignmentList() {
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !deleting) setDeleteTarget(null); }}
         >
           <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
           <div
@@ -834,15 +882,38 @@ export default function AssignmentList() {
               </p>
             </div>
             <div className="px-6 pb-6 flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition">Batal</button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-650 hover:bg-red-700 rounded-lg transition disabled:opacity-50">
+              <button
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >Batal</button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-650 hover:bg-red-700 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {deleting ? "Menghapus..." : "Hapus"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Toast Alert */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} className="text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+      <ExportConfirmationModal
+        isOpen={showExportConfirm}
+        onClose={() => setShowExportConfirm(false)}
+        onConfirm={handleExport}
+      />
     </div>
   );
 } 

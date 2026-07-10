@@ -202,7 +202,7 @@ export default function AssetDetail() {
             fetchDetail();
           }) // refresh di background
           .catch((err) => {
-            alert(err?.response?.data?.message || "Gagal menyimpan perubahan");
+            setToast(err?.response?.data?.message || "Gagal menyimpan perubahan");
             fetchDetail();
           });
 
@@ -214,7 +214,7 @@ export default function AssetDetail() {
             fetchDetail();
           }) // refresh di background
           .catch((err) => {
-            alert(err?.response?.data?.message || "Gagal menyimpan property");
+            setToast(err?.response?.data?.message || "Gagal menyimpan property");
             fetchDetail();
           });
       }
@@ -247,7 +247,7 @@ export default function AssetDetail() {
         setToast("Spesifikasi berhasil dihapus");
       })
       .catch(() => {
-        alert("Gagal menghapus property");
+        setToast("Gagal menghapus property");
         fetchDetail(); // rollback
       });
   };

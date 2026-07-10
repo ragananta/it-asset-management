@@ -6,6 +6,7 @@ interface Asset {
   asset_name: string;
   asset_code: string;
   status?: string;
+  condition_status?: string;
 }
 
 interface AssetsContextValue {

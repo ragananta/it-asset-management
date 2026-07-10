@@ -23,8 +23,20 @@ class AssignmentExport implements FromQuery, WithHeadings, WithMapping, WithStyl
 
     public function query()
     {
-        $query = AssetAssignment::with('asset:id,asset_name,asset_code')
-            ->orderByDesc('assign_date');
+        $query = AssetAssignment::with('asset:id,asset_name,asset_code');
+
+        $sortBy = $this->request->get('sort_by', 'assign_date');
+        $sortOrder = strtolower($this->request->get('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $allowedSorts = ['user_name', 'phone', 'assign_date', 'return_date', 'created_at', 'updated_at'];
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortOrder);
+            if ($sortBy !== 'id') {
+                $query->orderBy('id', 'desc');
+            }
+        } else {
+            $query->orderByDesc('assign_date')
+                  ->orderByDesc('id');
+        }
 
         if ($this->request->filled('search')) {
             $query->where('user_name', 'like', '%' . $this->request->search . '%');

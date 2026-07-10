@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import api from "../../api/axios";
-import { Search, Plus, Pencil, Trash2, X, Save, Eye, Smartphone, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Save, Eye, Smartphone, HelpCircle, ChevronDown, ChevronUp, Barcode } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 interface Asset {
@@ -82,7 +82,7 @@ export default function PlotingDeviceList() {
   const [plotingDevices, setPlotingDevices] = useState<PlotingDevice[]>([]);
   const [assetsPool, setAssetsPool] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [storeOptions, setStoreOptions] = useState<{ id: number; name: string }[]>([]);
+  const [storeOptions, setStoreOptions] = useState<{ id: number; code?: string; name: string }[]>([]);
 
   // Lazy Loading Dropdown States
   const [loadingAssetsPool, setLoadingAssetsPool] = useState(false);
@@ -267,8 +267,8 @@ export default function PlotingDeviceList() {
   }, [currentPage, rowsPerPage, search, statusFilter, storeFilter, sortBy, sortOrder, refreshKey]);
 
   // Load Store Options lazily
-  const loadStoreOptions = async () => {
-    if (hasLoadedStoreOptions || loadingStoreOptions) return;
+  const loadStoreOptions = async (force = false) => {
+    if (!force && (hasLoadedStoreOptions || loadingStoreOptions)) return;
     setLoadingStoreOptions(true);
     try {
       const res = await api.get("/stores/options");
@@ -282,8 +282,8 @@ export default function PlotingDeviceList() {
   };
 
   // Load Assets Pool lazily
-  const loadAssetsPool = async () => {
-    if (hasLoadedAssetsPool || loadingAssetsPool) return;
+  const loadAssetsPool = async (force = false) => {
+    if (!force && (hasLoadedAssetsPool || loadingAssetsPool)) return;
     setLoadingAssetsPool(true);
     try {
       const res = await api.get("/assets?per_page=1000");
@@ -308,7 +308,23 @@ export default function PlotingDeviceList() {
       if (asset.condition_status === "retired" || asset.status === "disposed") {
         return false;
       }
-      return true;
+
+      // Check if it belongs to the current Tas Package being edited
+      const belongsToCurrentPackage =
+        editTarget &&
+        asset.parent_package &&
+        asset.parent_package.asset_code === editTarget.code;
+
+      if (belongsToCurrentPackage) {
+        return true;
+      }
+
+      // Otherwise, the asset must satisfy availability rules:
+      const isNotBorrowed = asset.status !== "borrowed";
+      const isNotAssignedToOtherTas = !asset.parent_package;
+      const isNotAssignedToStore = !asset.store_package;
+
+      return isNotBorrowed && isNotAssignedToOtherTas && isNotAssignedToStore;
     });
   };
 
@@ -317,13 +333,13 @@ export default function PlotingDeviceList() {
     setErrors({});
     setEditTarget(null);
     setModalOpen(true);
-    loadStoreOptions();
-    loadAssetsPool();
+    loadStoreOptions(true);
+    loadAssetsPool(true);
   };
 
   const openEdit = (target: PlotingDevice) => {
-    loadStoreOptions();
-    loadAssetsPool();
+    loadStoreOptions(true);
+    loadAssetsPool(true);
     api.get(`/ploting-devices/${target.id}`)
       .then((res) => {
         const fullDetail = res?.data?.data;
@@ -507,6 +523,7 @@ export default function PlotingDeviceList() {
           <div className="relative w-full sm:w-48">
             <button
               type="button"
+              disabled={loadingStoreOptions}
               onClick={() => {
                 const nextState = !showStoreFilterDropdown;
                 setShowStoreFilterDropdown(nextState);
@@ -514,10 +531,14 @@ export default function PlotingDeviceList() {
                   loadStoreOptions();
                 }
               }}
-              className="w-full h-10 px-5 flex items-center justify-between rounded-full border border-gray-250 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer"
+              className="w-full h-10 px-5 flex items-center justify-between rounded-full border border-gray-250 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm cursor-pointer disabled:bg-gray-50 disabled:cursor-wait"
             >
-              <span className={storeFilter ? "text-slate-800 font-semibold" : "text-gray-400"}>
-                {storeFilter ? storeOptions.find(s => String(s.id) === String(storeFilter))?.name || storeFilter : "Semua Store"}
+              <span className={storeFilter || loadingStoreOptions ? "text-slate-800 font-semibold" : "text-gray-400"}>
+                {loadingStoreOptions
+                  ? "Memuat..."
+                  : storeFilter
+                  ? storeOptions.find(s => String(s.id) === String(storeFilter))?.name || storeFilter
+                  : "Semua Store"}
               </span>
               <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
             </button>
@@ -546,7 +567,7 @@ export default function PlotingDeviceList() {
                       <button
                         type="button"
                         onClick={() => setStoreFilterSearchQuery("")}
-                        className="absolute right-3 text-gray-400 hover:text-gray-650"
+                        className="absolute right-3 text-gray-400 hover:text-gray-600"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -554,42 +575,51 @@ export default function PlotingDeviceList() {
                   </div>
 
                   <div className="overflow-y-auto divide-y divide-gray-100 flex-1 max-h-48 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStoreFilter("");
-                        setCurrentPage(1);
-                        setShowStoreFilterDropdown(false);
-                        setStoreFilterSearchQuery("");
-                      }}
-                      className={`w-full text-left p-3 text-xs transition hover:bg-slate-50 ${
-                        !storeFilter ? "bg-brand-50/50 font-semibold text-brand-700" : "text-slate-700"
-                      }`}
-                    >
-                      Semua Store
-                    </button>
-                    {filteredStoreFilterOptions.length === 0 ? (
-                      <div className="p-3 text-xs text-gray-450 font-medium text-center">
-                        Tidak ada store ditemukan.
+                    {loadingStoreOptions ? (
+                      <div className="p-3 text-xs text-gray-400 font-medium text-center animate-pulse">
+                        Memuat data store...
                       </div>
                     ) : (
-                      filteredStoreFilterOptions.map((store) => (
+                      <>
                         <button
-                          key={store.id}
                           type="button"
                           onClick={() => {
-                            setStoreFilter(String(store.id));
+                            setStoreFilter("");
                             setCurrentPage(1);
                             setShowStoreFilterDropdown(false);
                             setStoreFilterSearchQuery("");
                           }}
                           className={`w-full text-left p-3 text-xs transition hover:bg-slate-50 ${
-                            String(storeFilter) === String(store.id) ? "bg-brand-50/50 font-semibold text-brand-700" : "text-slate-700"
+                            !storeFilter ? "bg-brand-50/50 font-semibold text-brand-700" : "text-slate-700"
                           }`}
                         >
-                          {store.name}
+                          Semua Store
                         </button>
-                      ))
+                        {filteredStoreFilterOptions.length === 0 ? (
+                          <div className="p-3 text-xs text-gray-450 font-medium text-center">
+                            Tidak ada store ditemukan.
+                          </div>
+                        ) : (
+                          filteredStoreFilterOptions.map((store) => (
+                            <button
+                              key={store.id}
+                              type="button"
+                              onClick={() => {
+                                setStoreFilter(String(store.id));
+                                setCurrentPage(1);
+                                setShowStoreFilterDropdown(false);
+                                setStoreFilterSearchQuery("");
+                              }}
+                              className={`w-full text-left p-3 text-xs transition flex flex-col gap-0.5 hover:bg-slate-50 ${
+                                String(storeFilter) === String(store.id) ? "bg-brand-50/50 font-semibold text-brand-700" : "text-slate-700"
+                              }`}
+                            >
+                              <span className="font-semibold">{store.name}</span>
+                              <span className="text-[10px] text-gray-400 font-semibold">{store.code}</span>
+                            </button>
+                          ))
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -608,7 +638,7 @@ export default function PlotingDeviceList() {
             />
             {searchInput && (
               <button
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-650"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 onClick={() => {
                   setSearchInput("");
                   setSearch("");
@@ -653,7 +683,7 @@ export default function PlotingDeviceList() {
         ) : plotingDevices.length === 0 ? (
           <div className="py-20 text-center flex flex-col items-center justify-center gap-3">
             <div className="w-16 h-16 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mb-2">
-              <Smartphone className="w-8 h-8" />
+              <Barcode className="w-8 h-8" />
             </div>
             <h3 className="font-bold text-slate-800 text-base">Tidak Ada Data Asset Package</h3>
             <p className="text-xs text-slate-400 max-w-sm px-4">
@@ -703,13 +733,13 @@ export default function PlotingDeviceList() {
                     <td className="py-3.5 px-5 text-center text-slate-400 text-xs">
                       {(currentPage - 1) * rowsPerPage + index + 1}
                     </td>
-                    <td className="py-3.5 px-5 font-semibold text-slate-700 font-mono text-xs">
+                    <td className="py-3.5 px-5 font-mono text-xs text-slate-700">
                       {item.code}
                     </td>
-                    <td className="py-3.5 px-5 font-semibold text-slate-800">
+                    <td className="py-3.5 px-5 font-medium text-slate-800">
                       {item.name}
                     </td>
-                    <td className="py-3.5 px-5 text-slate-660 font-semibold">
+                    <td className="py-3.5 px-5 text-slate-660 font-medium">
                       {item.store_name || "-"}
                     </td>
                     <td className="py-3.5 px-5 text-center font-bold text-slate-700">
@@ -747,7 +777,7 @@ export default function PlotingDeviceList() {
                         </button>
                         <button
                           onClick={() => setDeleteTarget(item)}
-                          className="w-7 h-7 bg-red-50 text-red-650 hover:bg-red-100 rounded-full flex items-center justify-center transition"
+                          className="w-7 h-7 bg-red-50 text-red-600 hover:bg-red-100 rounded-full flex items-center justify-center transition"
                           title="Hapus Mapping"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -770,8 +800,8 @@ export default function PlotingDeviceList() {
             {/* Modal Header */}
             <div className="bg-teal-50 px-6 py-4 flex items-center justify-between border-b border-teal-100">
               <div className="flex items-center gap-3">
-                <div className="bg-teal-650 text-white rounded-lg w-8 h-8 flex items-center justify-center shadow-md">
-                  <Smartphone className="w-4 h-4" />
+                <div className="bg-teal-600 text-white rounded-lg w-8 h-8 flex items-center justify-center shadow-md">
+                  <Barcode className="w-4 h-4" />
                 </div>
                 <h3 className="font-bold text-slate-800 text-base">
                   {editTarget ? "Edit Asset Package" : "Tambah Asset Package"}
@@ -828,7 +858,7 @@ export default function PlotingDeviceList() {
                               <button
                                 type="button"
                                 onClick={() => setTasSearchQuery("")}
-                                className="absolute right-3 text-gray-400 hover:text-gray-650"
+                                className="absolute right-3 text-gray-400 hover:text-gray-600"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -905,7 +935,7 @@ export default function PlotingDeviceList() {
                             <button
                               type="button"
                               onClick={() => setStoreSearchQuery("")}
-                              className="absolute right-3 text-gray-400 hover:text-gray-650"
+                              className="absolute right-3 text-gray-400 hover:text-gray-600"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -973,7 +1003,7 @@ export default function PlotingDeviceList() {
                           <button
                             type="button"
                             onClick={() => setAssetSearchQuery("")}
-                            className="absolute right-2.5 text-gray-400 hover:text-gray-650"
+                            className="absolute right-2.5 text-gray-400 hover:text-gray-600"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -984,6 +1014,10 @@ export default function PlotingDeviceList() {
                       {loadingAssetsPool ? (
                         <div className="py-8 text-center text-gray-400 text-xs font-medium animate-pulse">
                           Memuat daftar asset...
+                        </div>
+                      ) : availableAssets.length === 0 ? (
+                        <div className="py-8 text-center text-gray-400 text-xs font-medium">
+                          Tidak ada asset tersedia untuk pemetaan.
                         </div>
                       ) : (
                         availableAssets
@@ -998,27 +1032,17 @@ export default function PlotingDeviceList() {
                         })
                         .map((asset) => {
                           const isChecked = form.asset_ids.includes(asset.id);
-                          const isBelongsToOtherPackage = !!(asset.parent_package &&
-                            (!editTarget || asset.parent_package.asset_code !== editTarget.code));
-                          const isBelongsToStore = !!asset.store_package;
                           const isBorrowed = asset.status === "borrowed";
-                          const isDisabled = (isBelongsToOtherPackage || isBelongsToStore || isBorrowed) && !isChecked;
 
                           return (
                             <label
                               key={asset.id}
-                              className={`flex items-center gap-3 px-4 py-2.5 select-none transition ${
-                                isDisabled
-                                  ? "opacity-50 cursor-not-allowed bg-slate-50/30"
-                                  : "hover:bg-slate-50/65 cursor-pointer"
-                              }`}
+                              className="flex items-center gap-3 px-4 py-2.5 select-none transition hover:bg-slate-50/65 cursor-pointer"
                             >
                               <input
                                 type="checkbox"
                                 checked={isChecked}
-                                disabled={isDisabled}
                                 onChange={(e) => {
-                                  if (isDisabled) return;
                                   if (e.target.checked) {
                                     setForm((prev) => ({
                                       ...prev,
@@ -1031,9 +1055,7 @@ export default function PlotingDeviceList() {
                                     }));
                                   }
                                 }}
-                                className={`w-4 h-4 rounded text-teal-600 border-gray-300 focus:ring-teal-550 focus:ring-[3px] focus:ring-teal-500/15 ${
-                                  isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-                                }`}
+                                className="w-4 h-4 rounded text-teal-600 border-gray-300 focus:ring-teal-550 focus:ring-[3px] focus:ring-teal-500/15 cursor-pointer"
                               />
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-semibold text-slate-700 font-mono">
@@ -1042,16 +1064,6 @@ export default function PlotingDeviceList() {
                                 <p className="text-[11px] text-slate-400 font-medium truncate">
                                   {asset.asset_name}
                                 </p>
-                                {isBelongsToOtherPackage && asset.parent_package && (
-                                  <p className="text-[10px] text-red-500 font-semibold mt-0.5">
-                                    [Already in Asset Package: {asset.parent_package.asset_name}]
-                                  </p>
-                                )}
-                                {isBelongsToStore && asset.store_package && (
-                                  <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                                    [Already in Store: {asset.store_package.store_name}]
-                                  </p>
-                                )}
                                 {isBorrowed && (
                                   <p className="text-[10px] text-red-500 font-semibold mt-0.5">
                                     [Sedang Dipinjam]
@@ -1120,7 +1132,7 @@ export default function PlotingDeviceList() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
             <div className="bg-red-50 p-6 flex flex-col items-center text-center gap-3 border-b border-red-100">
-              <div className="bg-red-650 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg">
+              <div className="bg-red-600 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg">
                 <Trash2 className="w-5 h-5" />
               </div>
               <h3 className="font-bold text-slate-800 text-base">Hapus Mapping Asset Package</h3>

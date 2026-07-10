@@ -7,6 +7,7 @@ export interface Karyawan {
   departemen: string;
   pos: string;
   email: string;
+  phone?: string;
 }
 
 interface KaryawanContextValue {

@@ -18,6 +18,7 @@ import {
   Search,
   X
 } from "lucide-react";
+import ExportConfirmationModal from "../../components/ExportConfirmationModal";
 
 interface EmployeeAsset {
   id: number;
@@ -61,7 +62,8 @@ export default function AssetsByEmployee() {
   // UI and Filters
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [filterDept, setFilterDept] = useState(() => searchParams.get("category") || "");
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
+  const [filterDept, setFilterDept] = useState(() => searchParams.get("department") || "");
   const initialSearch = searchParams.get("search") || "";
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
@@ -73,13 +75,20 @@ export default function AssetsByEmployee() {
   const [sortOrder, setSortOrder] = useState(() => searchParams.get("order") || "asc");
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
   const [deptSearchQuery, setDeptSearchQuery] = useState("");
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
 
   useEffect(() => {
     const params: Record<string, string> = {};
     if (currentPage > 1) params.page = String(currentPage);
     if (search) params.search = search;
-    if (filterDept) params.category = filterDept;
+    if (filterDept) params.department = filterDept;
     if (sortBy && sortBy !== "user_name") params.sort = sortBy;
     if (sortOrder && sortOrder !== "asc") params.order = sortOrder;
     setSearchParams(params, { replace: true });
@@ -239,6 +248,8 @@ export default function AssetsByEmployee() {
       const params = new URLSearchParams();
       if (filterDept) params.append("department", filterDept);
       if (search) params.append("search", search);
+      if (sortBy) params.append("sort_by", sortBy);
+      if (sortOrder) params.append("sort_order", sortOrder);
       
       const res = await api.get(`/reports/assets-by-employee/export?${params}`, { responseType: "blob" });
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -249,9 +260,10 @@ export default function AssetsByEmployee() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      setToast("Data berhasil diekspor.");
     } catch (err) {
       console.error("ERROR export assets-by-employee:", err);
-      alert("Gagal melakukan export data");
+      setToast("Gagal melakukan export data");
     } finally {
       setExporting(false);
     }
@@ -416,21 +428,12 @@ export default function AssetsByEmployee() {
 
           {/* Export to Excel */}
           <button
-            onClick={handleExport}
+            onClick={() => setShowExportConfirm(true)}
             disabled={exporting || loading}
             className="h-10 px-5 bg-brand-50 border border-brand-200 rounded-full text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50 transition flex items-center gap-1.5 shadow-sm"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-brand-600" />
-            {exporting ? "Mengunduh..." : "Export Excel"}
-          </button>
-
-          {/* Refresh button */}
-          <button
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="w-10 h-10 border border-gray-200 rounded-full bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition flex items-center justify-center shadow-sm"
-            title="Muat ulang data"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            {exporting ? "Mengekspor..." : "Export Excel"}
           </button>
         </div>
       </div>
@@ -659,6 +662,21 @@ export default function AssetsByEmployee() {
           })
         )}
       </div>
+
+      {/* Toast Alert */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} className="text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+      <ExportConfirmationModal
+        isOpen={showExportConfirm}
+        onClose={() => setShowExportConfirm(false)}
+        onConfirm={handleExport}
+      />
     </div>
   );
 }

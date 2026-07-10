@@ -6,6 +6,7 @@ export interface Employee {
   departemen: string;
   pos?: string;
   email?: string;
+  phone?: string;
 }
 
 export interface Asset {

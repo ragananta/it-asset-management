@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
+import EmptyState from "../../components/EmptyState";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -792,9 +793,24 @@ export default function AuditLogList() {
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             {loadingAssets ? (
-              <div className="py-16 text-center text-gray-400 text-sm">Loading...</div>
+              <div className="p-5 space-y-4">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 animate-pulse">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 bg-slate-100 rounded w-1/3" />
+                      <div className="h-3 bg-slate-100 rounded w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : assets.length === 0 ? (
-              <div className="py-16 text-center text-gray-300 text-sm">Data aset belum tersedia</div>
+              <EmptyState
+                variant="page"
+                title="Data aset belum tersedia"
+                description="Belum ada aset yang terdaftar untuk audit log."
+                icon={<Package className="w-8 h-8 text-slate-400" />}
+              />
             ) : (
               <div className="divide-y divide-gray-50">
                 {assets.map((a) => {
@@ -844,8 +860,22 @@ export default function AuditLogList() {
               <p className="text-gray-300 text-xs mt-1">untuk melihat history lengkap aset</p>
             </div>
           ) : loadingDetail ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center py-20">
-              <p className="text-gray-400 text-sm">Memuat history...</p>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6 animate-pulse">
+              <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                <div className="h-4 bg-slate-100 rounded w-32" />
+                <div className="h-8 bg-slate-100 rounded-full w-24" />
+              </div>
+              <div className="relative pl-6 space-y-6 border-l-2 border-slate-100">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="relative">
+                    <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-slate-100 border-2 border-white" />
+                    <div className="space-y-2">
+                      <div className="h-3.5 bg-slate-100 rounded w-1/4" />
+                      <div className="h-3 bg-slate-100 rounded w-3/4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : selectedAsset && (
             <div className="space-y-4">

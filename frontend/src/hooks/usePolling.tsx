@@ -22,6 +22,7 @@ export function usePolling(
 ) {
   const refreshRef = useRef(onRefresh);
   const [focusTrigger, setFocusTrigger] = useState(0);
+  const mountTimeRef = useRef(Date.now());
 
   useEffect(() => {
     refreshRef.current = onRefresh;
@@ -32,6 +33,10 @@ export function usePolling(
     if (!enabled || !isAuthenticated()) return;
 
     const handleFocus = () => {
+      // Ignore initial browser focus event that occurs immediately after mounting (within 1 second)
+      if (Date.now() - mountTimeRef.current < 1000) {
+        return;
+      }
       if (!document.hidden && isAuthenticated()) {
         refreshRef.current();
         setFocusTrigger((t) => t + 1);

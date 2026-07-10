@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
-import { User, Key, Eye, EyeOff, Monitor } from "lucide-react";
+import { User, Key, Eye, EyeOff, Monitor, X } from "lucide-react";
 
 const SALOKA_GREEN       = "#2BA56E";
 const SALOKA_GREEN_DARK  = "#228A5A";
@@ -14,6 +14,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   const handleLogin = async () => {
     try {
       setLoading(true);
@@ -21,7 +29,7 @@ export default function Login() {
       localStorage.setItem("token", res.data.data.token);
       navigate("/dashboard"); // ← tidak reload halaman
     } catch (err: any) {
-      alert(err.response?.data?.message || "Login gagal");
+      setToast(err.response?.data?.message || "Login gagal");
     } finally {
       setLoading(false);
     }
@@ -173,6 +181,16 @@ export default function Login() {
 
         </div>
       </div>
+
+      {/* Toast Alert */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} className="text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

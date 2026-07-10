@@ -4,10 +4,13 @@ import api from "../../api/axios";
 import axios from "axios";
 import { useAssets } from "../../context/AssetsContext";
 import { usePolling } from "../../hooks/usePolling";
-import { Search, Plus, Pencil, Trash2, X, Check, Wrench, Download, Filter, Save, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, Wrench, Download, Filter, Save, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { isListEqual } from "../../utils/equality";
+import TableSkeleton from "../../components/TableSkeleton";
+import EmptyState from "../../components/EmptyState";
+import ExportConfirmationModal from "../../components/ExportConfirmationModal";
 
 interface Asset {
   id: number;
@@ -61,7 +64,7 @@ const sortNewestFirst = (items: MaintenanceLog[]) =>
   });
 
 export default function MaintenanceList() {
-  const { assets, ensureAssets } = useAssets();
+  const { assets, ensureAssets, loadingAssets } = useAssets();
 
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,8 +76,13 @@ export default function MaintenanceList() {
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [search, setSearch] = useState(initialSearch);
   const [filterStatus, setFilterStatus] = useState(() => searchParams.get("status") || "");
+  const [filterPic, setFilterPic] = useState(() => searchParams.get("pic") || "");
   const [filterDateFrom, setFilterDateFrom] = useState(() => searchParams.get("date_from") || "");
   const [filterDateTo, setFilterDateTo] = useState(() => searchParams.get("date_to") || "");
+  const [tempPic, setTempPic] = useState("");
+  const [tempDateFrom, setTempDateFrom] = useState("");
+  const [tempDateTo, setTempDateTo] = useState("");
+  const [pics, setPics] = useState<string[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
@@ -92,18 +100,28 @@ export default function MaintenanceList() {
     if (currentPage > 1) params.page = String(currentPage);
     if (search) params.search = search;
     if (filterStatus) params.status = filterStatus;
+    if (filterPic) params.pic = filterPic;
     if (filterDateFrom) params.date_from = filterDateFrom;
     if (filterDateTo) params.date_to = filterDateTo;
     if (sortBy && sortBy !== "date") params.sort = sortBy;
     if (sortOrder && sortOrder !== "desc") params.order = sortOrder;
     setSearchParams(params, { replace: true });
-  }, [currentPage, search, filterStatus, filterDateFrom, filterDateTo, rowsPerPage, sortBy, sortOrder, setSearchParams]);
+  }, [currentPage, search, filterStatus, filterPic, filterDateFrom, filterDateTo, rowsPerPage, sortBy, sortOrder, setSearchParams]);
 
   const [totalData, setTotalData] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSilentRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalClosing, setModalClosing] = useState(false);
@@ -111,8 +129,18 @@ export default function MaintenanceList() {
   const [form, setForm] = useState<MaintenanceForm>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !saving) requestCloseModal();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen, saving]);
+
   const [deleteTarget, setDeleteTarget] = useState<MaintenanceLog | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
 
   // Custom asset select dropdown states
   const [showAssetDropdown, setShowAssetDropdown] = useState(false);
@@ -120,14 +148,20 @@ export default function MaintenanceList() {
   const assetDropdownRef = useRef<HTMLDivElement>(null);
 
   const filteredAssetOptions = useMemo(() => {
+    const available = assets.filter((a) => {
+      const isUnderMaintenance = a.condition_status === "under_maintenance";
+      const isCurrentAsset = String(form.asset_id) === String(a.id);
+      return !isUnderMaintenance || isCurrentAsset;
+    });
+
     const q = assetSearch.toLowerCase().trim();
-    if (!q) return assets;
-    return assets.filter(
+    if (!q) return available;
+    return available.filter(
       (a) =>
         a.asset_code?.toLowerCase().includes(q) ||
         a.asset_name?.toLowerCase().includes(q)
     );
-  }, [assets, assetSearch]);
+  }, [assets, assetSearch, form.asset_id]);
 
   const triggerRefresh = () => {
     isSilentRef.current = false;
@@ -161,11 +195,23 @@ export default function MaintenanceList() {
     searchTimer.current = setTimeout(() => { setSearch(val); setCurrentPage(1); }, 400);
   };
 
-  const activeFilterCount = [filterDateFrom, filterDateTo].filter(Boolean).length;
+  const activeFilterCount = [filterPic, filterDateFrom, filterDateTo].filter(Boolean).length;
 
   const resetDateFilter = () => {
+    setFilterPic("");
     setFilterDateFrom("");
     setFilterDateTo("");
+    setTempPic("");
+    setTempDateFrom("");
+    setTempDateTo("");
+    setCurrentPage(1);
+    setFilterOpen(false);
+  };
+
+  const applyFilters = () => {
+    setFilterPic(tempPic);
+    setFilterDateFrom(tempDateFrom);
+    setFilterDateTo(tempDateTo);
     setCurrentPage(1);
     setFilterOpen(false);
   };
@@ -184,6 +230,7 @@ export default function MaintenanceList() {
         const params = new URLSearchParams({ page: String(currentPage), per_page: String(rowsPerPage) });
         if (search) params.append("search", search);
         if (filterStatus) params.append("status", filterStatus);
+        if (filterPic) params.append("pic", filterPic);
         if (filterDateFrom) params.append("date_from", filterDateFrom);
         if (filterDateTo) params.append("date_to", filterDateTo);
         if (sortBy) params.append("sort_by", sortBy);
@@ -194,6 +241,10 @@ export default function MaintenanceList() {
         });
 
         const payload = res?.data?.data;
+
+        if (payload?.pics) {
+          setPics(payload.pics);
+        }
 
         // Handle response baru yang include total_cost
         if (payload?.logs) {
@@ -256,7 +307,7 @@ export default function MaintenanceList() {
       controller.abort();
       isFetchingRef.current = false;
     };
-  }, [currentPage, rowsPerPage, search, filterStatus, filterDateFrom, filterDateTo, sortBy, sortOrder, refreshKey]);
+  }, [currentPage, rowsPerPage, search, filterStatus, filterPic, filterDateFrom, filterDateTo, sortBy, sortOrder, refreshKey]);
 
   const startIndex = (currentPage - 1) * rowsPerPage;
   const ongoingCount = logs.filter((l) => l.status === "ongoing").length;
@@ -278,8 +329,11 @@ export default function MaintenanceList() {
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (filterStatus) params.append("status", filterStatus);
+      if (filterPic) params.append("pic", filterPic);
       if (filterDateFrom) params.append("date_from", filterDateFrom);
       if (filterDateTo) params.append("date_to", filterDateTo);
+      if (sortBy) params.append("sort_by", sortBy);
+      if (sortOrder) params.append("sort_order", sortOrder);
 
       const res = await api.get(`/maintenance-logs/export?${params}`, {
         responseType: "blob",
@@ -293,9 +347,10 @@ export default function MaintenanceList() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      setToast("Data berhasil diekspor.");
     } catch (err) {
       console.error("ERROR export:", err);
-      alert("Gagal export data");
+      setToast("Gagal export data");
     } finally {
       setExporting(false);
     }
@@ -323,12 +378,13 @@ export default function MaintenanceList() {
   const closeModal = () => { setModalOpen(false); setModalClosing(false); setEditTarget(null); setForm(emptyForm); setErrors({}); setShowAssetDropdown(false); setAssetSearch(""); };
 
   const requestCloseModal = () => {
-    if (modalClosing) return;
+    if (saving || modalClosing) return;
     setModalClosing(true);
     window.setTimeout(() => closeModal(), 200);
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (editTarget?.status === "completed") {
       setErrors({ status: "Maintenance yang sudah selesai tidak dapat diedit." });
       return;
@@ -338,21 +394,21 @@ export default function MaintenanceList() {
 
     try {
       setErrors({});
+      setSaving(true);
       const payload = { ...form, asset_id: Number(form.asset_id), cost: Number(form.cost) };
-
-      requestCloseModal(); // ← tutup modal langsung
 
       if (target) {
         const res = await api.put(`/maintenance-logs/${target.id}`, payload);
         const updated: MaintenanceLog = res?.data?.data || { ...target, ...payload };
         setLogs((prev) => sortNewestFirst(prev.map((item) => item.id === target.id ? { ...item, ...updated } : item)));
+        setToast("Log maintenance berhasil diperbarui");
       } else {
         await api.post("/maintenance-logs", payload);
         setCurrentPage(1); triggerRefresh();
+        setToast("Log maintenance berhasil ditambahkan");
       }
+      closeModal();
     } catch (err: any) {
-      setModalOpen(true); setModalClosing(false); // buka modal lagi kalau error
-      setEditTarget(target);
       if (err?.response?.data?.errors) {
         const apiErrors: Record<string, string> = {};
         Object.entries(err.response.data.errors).forEach(([key, val]) => {
@@ -362,12 +418,15 @@ export default function MaintenanceList() {
       } else {
         setErrors({ form: err?.response?.data?.message || "Gagal menyimpan maintenance" });
       }
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleting) return;
 
+    setDeleting(true);
     const prevLogs = logs;
     const prevTotal = totalData;
 
@@ -378,11 +437,18 @@ export default function MaintenanceList() {
     setCurrentPage(newPage);
     setDeleteTarget(null); // tutup modal langsung
 
-    api.delete(`/maintenance-logs/${deleteTarget.id}`).catch((err) => {
-      setLogs(prevLogs);
-      setTotalData(prevTotal);
-      alert(err?.response?.data?.message || "Gagal menghapus log maintenance");
-    });
+    api.delete(`/maintenance-logs/${deleteTarget.id}`)
+      .then(() => {
+        setToast("Log maintenance berhasil dihapus");
+      })
+      .catch((err) => {
+        setLogs(prevLogs);
+        setTotalData(prevTotal);
+        setToast(err?.response?.data?.message || "Gagal menghapus log maintenance");
+      })
+      .finally(() => {
+        setDeleting(false);
+      });
   };
 
   const formatCurrency = (val: number) =>
@@ -437,7 +503,17 @@ export default function MaintenanceList() {
               </button>
             )}
             <button
-              onClick={() => setFilterOpen((v) => !v)}
+              onClick={() => {
+                setFilterOpen((v) => {
+                  const next = !v;
+                  if (next) {
+                    setTempPic(filterPic);
+                    setTempDateFrom(filterDateFrom);
+                    setTempDateTo(filterDateTo);
+                  }
+                  return next;
+                });
+              }}
               className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full shadow transition ${
                 activeFilterCount > 0 ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-teal-500 text-white hover:bg-teal-600"
               }`}
@@ -451,47 +527,78 @@ export default function MaintenanceList() {
             </button>
 
             {filterOpen && (
-              <div className="absolute right-0 top-12 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gray-700">Filter Tanggal</p>
-                  {activeFilterCount > 0 && (
-                    <button onClick={resetDateFilter} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                      <X className="w-3 h-3" /> Reset
-                    </button>
-                  )}
+              <div className="absolute right-0 top-12 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                  <p className="text-sm font-bold text-gray-700">Filter Maintenance</p>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Dari</label>
-                  <input type="date"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    value={filterDateFrom}
-                    onChange={(e) => { setFilterDateFrom(e.target.value); setCurrentPage(1); }}
-                  />
+                
+                {/* PIC Dropdown */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-gray-500">PIC</label>
+                  <select
+                    className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650 cursor-pointer"
+                    value={tempPic}
+                    onChange={(e) => setTempPic(e.target.value)}
+                  >
+                    <option value="">Semua PIC</option>
+                    {pics.map((picName) => (
+                      <option key={picName} value={picName}>
+                        {picName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Sampai</label>
-                  <input type="date"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    value={filterDateTo}
-                    onChange={(e) => { setFilterDateTo(e.target.value); setCurrentPage(1); }}
-                  />
+
+                {/* Tanggal Range */}
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tanggal</p>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-gray-500">Dari</label>
+                    <input type="date"
+                      className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650"
+                      value={tempDateFrom}
+                      onChange={(e) => setTempDateFrom(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-gray-500">Sampai</label>
+                    <input type="date"
+                      className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650"
+                      value={tempDateTo}
+                      onChange={(e) => setTempDateTo(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <button onClick={() => setFilterOpen(false)}
-                  className="w-full py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
-                  Terapkan
-                </button>
+
+                {/* Footer Buttons */}
+                <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
+                  <button
+                    type="button"
+                    onClick={resetDateFilter}
+                    className="flex-1 py-2 text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-650 rounded-lg transition"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyFilters}
+                    className="flex-1 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                  >
+                    Terapkan
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
           {/* Export */}
           <button
-            onClick={handleExport}
+            onClick={() => setShowExportConfirm(true)}
             disabled={exporting}
             className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition disabled:opacity-50 w-full sm:w-auto"
           >
             <Download className="w-4 h-4" />
-            {exporting ? "..." : "Export"}
+            {exporting ? "Mengekspor..." : "Export"}
           </button>
 
           {/* Tambah */}
@@ -570,11 +677,18 @@ export default function MaintenanceList() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={8} className="py-16 text-center text-gray-400">Loading...</td></tr>
+              <TableSkeleton columns={8} rows={rowsPerPage} />
             ) : logs.length === 0 ? (
-              <tr><td colSpan={8} className="py-16 text-center text-gray-300">
-                {search ? "Tidak ada data yang cocok" : "Data maintenance belum tersedia"}
-              </td></tr>
+              <tr>
+                <td colSpan={8} className="p-0">
+                  <EmptyState
+                    variant="table"
+                    title={search ? "Tidak ada data yang cocok" : "Data maintenance belum tersedia"}
+                    description={search ? "Coba ubah kata kunci pencarian Anda." : "Data maintenance akan tampil di sini."}
+                    icon={<Wrench className="w-8 h-8 text-slate-400" />}
+                  />
+                </td>
+              </tr>
             ) : (
               logs.map((log, idx) => (
                 <tr key={log.id} className={`transition ${log.status === "completed" ? "bg-gray-50/60 hover:bg-gray-50" : "hover:bg-blue-50/20"}`}>
@@ -677,7 +791,8 @@ export default function MaintenanceList() {
               <button
                 type="button"
                 onClick={requestCloseModal}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                disabled={saving}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
                 aria-label="Tutup modal"
               >
                 <X className="w-4 h-4" />
@@ -702,21 +817,24 @@ export default function MaintenanceList() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 gap-5">
                   {/* Field: Aset */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-650 mb-1.5">Aset <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">Aset <span className="text-red-500">*</span></label>
                     <div className={`relative ${showAssetDropdown ? "z-30" : "z-10"}`} ref={assetDropdownRef}>
                       <button
                         type="button"
+                        disabled={saving || loadingAssets}
                         onClick={() => {
                           setShowAssetDropdown(!showAssetDropdown);
                           setAssetSearch("");
                         }}
-                        className={`w-full h-12 border rounded-lg px-3 text-sm bg-white text-left flex items-center justify-between transition-all focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.asset_id ? "border-red-400" : "border-[#dbe2ea]"}`}
+                        className={`w-full h-12 border rounded-lg px-3 text-sm bg-white text-left flex items-center justify-between transition-all focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.asset_id ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-wait`}
                       >
-                        <span className={form.asset_id ? "text-slate-800" : "text-gray-400"}>
-                          {form.asset_id
+                        <span className={form.asset_id || loadingAssets ? "text-slate-800 font-semibold" : "text-gray-400"}>
+                          {loadingAssets
+                            ? "Memuat data..."
+                            : form.asset_id
                             ? (() => {
                                 const selected = assets.find((a) => String(a.id) === String(form.asset_id));
                                 return selected ? `${selected.asset_code} — ${selected.asset_name}` : "-- Pilih Aset --";
@@ -780,18 +898,20 @@ export default function MaintenanceList() {
 
                   {/* Field: Tanggal */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-650 mb-1.5">Tanggal <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">Tanggal <span className="text-red-500">*</span></label>
                     <input type="date"
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${errors.date ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      disabled={saving}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${errors.date ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                     {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date}</p>}
                   </div>
 
                   {/* Field: Biaya */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-650 mb-1.5">Biaya (Rp)</label>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">Biaya (Rp)</label>
                     <input type="number"
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${errors.cost ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      disabled={saving}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${errors.cost ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       placeholder="0" value={form.cost}
                       onChange={(e) => setForm({ ...form, cost: e.target.value })} />
                     {errors.cost && <p className="text-red-500 text-xs mt-1">{errors.cost}</p>}
@@ -799,9 +919,10 @@ export default function MaintenanceList() {
 
                   {/* Field: PIC */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-650 mb-1.5">PIC / Teknisi <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">PIC / Teknisi <span className="text-red-500">*</span></label>
                     <input type="text"
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${errors.pic ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      disabled={saving}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${errors.pic ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       placeholder="Nama teknisi" value={form.pic}
                       onChange={(e) => setForm({ ...form, pic: e.target.value })} />
                     {errors.pic && <p className="text-red-500 text-xs mt-1">{errors.pic}</p>}
@@ -809,9 +930,10 @@ export default function MaintenanceList() {
 
                   {/* Field: Deskripsi */}
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-650 mb-1.5">Deskripsi <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-gray-655 mb-1.5">Deskripsi <span className="text-red-500">*</span></label>
                     <textarea
-                      className={`w-full border rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition resize-none ${errors.description ? "border-red-400" : "border-[#dbe2ea]"}`}
+                      disabled={saving}
+                      className={`w-full border rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition resize-none ${errors.description ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       placeholder="Jelaskan kerusakan atau tindakan maintenance..."
                       rows={3} value={form.description}
                       onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -821,17 +943,18 @@ export default function MaintenanceList() {
                   {/* Field: Status */}
                   {editTarget && (
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-650 mb-2">Status</label>
+                      <label className="block text-xs font-semibold text-gray-655 mb-2">Status</label>
                       <div className="flex gap-2">
                         {[
                           { val: "ongoing",   label: "Berlangsung", cls: "bg-amber-500 text-white border-amber-500" },
                           { val: "completed", label: "Selesai",     cls: "bg-teal-500 text-white border-teal-500" },
                         ].map((s) => (
                           <button key={s.val} type="button"
+                            disabled={saving}
                             onClick={() => setForm({ ...form, status: s.val })}
                             className={`flex-1 h-11 rounded-lg text-sm font-medium transition border ${
                               form.status === s.val ? s.cls : "bg-white text-gray-500 border-[#dbe2ea] hover:bg-gray-50"
-                            }`}>
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}>
                             {s.label}
                           </button>
                         ))}
@@ -847,16 +970,18 @@ export default function MaintenanceList() {
             <div className="sticky bottom-0 bg-white px-7 py-4 border-t border-[#eef2f7] flex justify-end gap-3 shrink-0">
               <button
                 onClick={requestCloseModal}
-                className="h-10 px-6 rounded-full bg-red-500 hover:bg-red-650 text-white text-sm font-semibold transition shadow-sm"
+                disabled={saving}
+                className="h-10 px-6 rounded-full bg-red-500 hover:bg-red-650 text-white text-sm font-semibold transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Batal
               </button>
               <button
                 onClick={handleSave}
-                className="h-10 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition flex items-center gap-2 shadow-sm"
+                disabled={saving}
+                className="h-10 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="w-4 h-4" />
-                Simpan
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? "Menyimpan..." : "Simpan"}
               </button>
             </div>
           </div>
@@ -868,7 +993,7 @@ export default function MaintenanceList() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-4"
           style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !deleting) setDeleteTarget(null); }}
         >
           <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
           <div
@@ -887,17 +1012,38 @@ export default function MaintenanceList() {
               </p>
             </div>
             <div className="px-6 pb-6 flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition">Batal</button>
+              <button
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-[#f8fafc] hover:bg-[#e2e8f0] rounded-[10px] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >Batal</button>
               <button
                 onClick={handleDelete}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition"
+                disabled={deleting}
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-[10px] transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Hapus
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {deleting ? "Menghapus..." : "Hapus"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Toast Alert */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} className="text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+      <ExportConfirmationModal
+        isOpen={showExportConfirm}
+        onClose={() => setShowExportConfirm(false)}
+        onConfirm={handleExport}
+      />
     </div>
   );
 }

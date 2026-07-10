@@ -14,12 +14,13 @@ class SendFonnteNotification implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function __construct(
-        public string $type, // 'borrowed' | 'returned'
+        public string $type, // 'borrowed' | 'returned' | 'maintenance_completed'
         public string $phone,
         public string $borrowerName,
         public string $assetName,
-        public $assignDate,
+        public $assignDate = null,
         public $returnDate = null,
+        public ?string $assetCode = null,
     ) {}
 
     public function handle(FonnteService $fonnte): void
@@ -31,6 +32,13 @@ class SendFonnteNotification implements ShouldQueue
                 assetName: $this->assetName,
                 assignDate: $this->assignDate,
                 returnDate: $this->returnDate,
+            );
+        } elseif ($this->type === 'maintenance_completed') {
+            $fonnte->notifyMaintenanceCompleted(
+                phone: $this->phone,
+                borrowerName: $this->borrowerName,
+                assetName: $this->assetName,
+                assetCode: $this->assetCode ?? '',
             );
         } else {
             $fonnte->notifyReturned(

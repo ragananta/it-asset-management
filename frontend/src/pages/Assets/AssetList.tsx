@@ -2,12 +2,15 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import api from "../../api/axios";
 import axios from "axios";
-import { Search, Filter, X, Trash2, Download, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, Filter, X, Trash2, Download, ChevronUp, ChevronDown, Package } from "lucide-react";
 import AssetModal from "../../components/AssetModal";
 import TablePagination from "../../components/pagination/TablePagination";
 import { usePolling } from "@/hooks/usePolling";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { isListEqual } from "../../utils/equality";
+import TableSkeleton from "../../components/TableSkeleton";
+import EmptyState from "../../components/EmptyState";
+import ExportConfirmationModal from "../../components/ExportConfirmationModal";
 
 interface Category { id: number; name: string; code: string; }
 interface Asset {
@@ -57,8 +60,10 @@ export default function AssetList() {
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
 
   const initialSearch = searchParams.get("search") || "";
   const [searchInput, setSearchInput] = useState(initialSearch);
@@ -125,10 +130,12 @@ export default function AssetList() {
   useEffect(() => {
     if (categoriesFetched.current) return;
     categoriesFetched.current = true;
+    setLoadingCategories(true);
     api.get("/categories?mode=options&limit=100").then((res) => {
       const data = res?.data?.data?.data || res?.data?.data || res?.data || [];
       setCategories(Array.isArray(data) ? data : []);
-    }).catch(() => {});
+    }).catch(() => {})
+      .finally(() => setLoadingCategories(false));
   }, []);
 
   const handleSearchInput = (val: string) => {
@@ -265,6 +272,8 @@ export default function AssetList() {
       if (filters.category) params.append("category_id", filters.category);
       if (filters.condition) params.append("condition_status", filters.condition);
       if (filters.status) params.append("status", filters.status);
+      if (sortBy) params.append("sort_by", sortBy);
+      if (sortOrder) params.append("sort_order", sortOrder);
 
       const res = await api.get(`/assets/export?${params}`, { responseType: "blob" });
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -275,9 +284,10 @@ export default function AssetList() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      setToast("Data berhasil diekspor.");
     } catch (err) {
       console.error("ERROR export:", err);
-      alert("Gagal export data");
+      setToast("Gagal export data");
     } finally {
       setExporting(false);
     }
@@ -370,11 +380,12 @@ export default function AssetList() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kategori</label>
                 <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
+                  disabled={loadingCategories}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 disabled:bg-gray-50 disabled:cursor-wait"
                   value={filters.category}
                   onChange={(e) => { setFilters((f) => ({ ...f, category: e.target.value })); setCurrentPage(1); }}
                 >
-                  <option value="">Semua Kategori</option>
+                  <option value="">{loadingCategories ? "Memuat..." : "Semua Kategori"}</option>
                   {categories.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
                 </select>
               </div>
@@ -416,12 +427,12 @@ export default function AssetList() {
 
         {/* Export */}
         <button
-          onClick={handleExport}
+          onClick={() => setShowExportConfirm(true)}
           disabled={exporting}
           className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 h-10 px-4 rounded-full text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition disabled:opacity-50 w-full sm:w-auto"
         >
           <Download className="w-4 h-4" />
-          {exporting ? "..." : "Export"}
+          {exporting ? "Mengekspor..." : "Export"}
         </button>
 
         {/* Tambah */}
@@ -532,11 +543,18 @@ export default function AssetList() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={8} className="py-16 text-center text-gray-400">Loading...</td></tr>
+              <TableSkeleton columns={8} rows={rowsPerPage} />
             ) : assets.length === 0 ? (
-              <tr><td colSpan={8} className="py-16 text-center text-gray-300">
-                {search || activeFilterCount > 0 ? "Tidak ada aset yang cocok" : "Data asset belum tersedia"}
-              </td></tr>
+              <tr>
+                <td colSpan={8} className="p-0">
+                  <EmptyState
+                    variant="table"
+                    title={search || activeFilterCount > 0 ? "Tidak ada aset yang cocok" : "Data asset belum tersedia"}
+                    description={search || activeFilterCount > 0 ? "Coba ubah kata kunci pencarian atau filter Anda." : "Aset akan muncul di sini setelah ditambahkan."}
+                    icon={<Package className="w-8 h-8 text-slate-400" />}
+                  />
+                </td>
+              </tr>
             ) : (
               assets.map((a, idx) => (
                 <tr
@@ -597,6 +615,7 @@ export default function AssetList() {
         onSuccess={handleSuccess}
         editAsset={editAsset}
         categories={categories}
+        loadingCategories={loadingCategories}
       />
 
       {/* MODAL DELETE */}
@@ -636,6 +655,11 @@ export default function AssetList() {
           </div>
         </div>
       )}
+      <ExportConfirmationModal
+        isOpen={showExportConfirm}
+        onClose={() => setShowExportConfirm(false)}
+        onConfirm={handleExport}
+      />
     </div>
   );
 }

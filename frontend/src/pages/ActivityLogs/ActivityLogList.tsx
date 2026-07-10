@@ -7,6 +7,8 @@ import { useRowsPerPage } from "../../hooks/useRowsPerPage";
 import { usePolling } from "@/hooks/usePolling";
 import { DatePicker } from "../../components/ui/date-picker";
 import { isListEqual } from "../../utils/equality";
+import TableSkeleton from "../../components/TableSkeleton";
+import EmptyState from "../../components/EmptyState";
 
 interface User {
   id: number;
@@ -301,97 +303,101 @@ export default function ActivityLogList() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
 
-      {/* HEADER INFO */}
-      <div className="flex items-center gap-2 mb-5">
-        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-          <ActivitySquare className="w-4 h-4 text-indigo-600" />
+      {/* TOOLBAR */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        {/* Info Text (Left) */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <ActivitySquare className="w-4 h-4 text-indigo-600" />
+          </div>
+          <p className="text-xs text-gray-400 font-medium whitespace-nowrap">
+            Dicatat otomatis oleh sistem · Read only
+          </p>
         </div>
-        <p className="text-xs text-gray-400">Dicatat otomatis oleh sistem · Read only</p>
-      </div>
 
-      {/* SEARCH + FILTER */}
-      <div className="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 mb-5">
-
-        {/* Search */}
-        <div className="relative w-full sm:w-80 md:w-96" ref={filterRef}>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            placeholder="Cari user, IP..."
-            className="w-full h-10 pl-9 pr-20 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
-            value={searchInput}
-            onChange={(e) => handleSearchInput(e.target.value)}
-          />
-          {searchInput && (
-            <button
-              className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          <button
-            onClick={() => setFilterOpen((v) => !v)}
-            className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full shadow transition ${
-              activeFilterCount > 0 ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-teal-500 text-white hover:bg-teal-600"
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
-          {filterOpen && (
-            <div className="absolute right-0 top-12 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-gray-700">Filter Log</p>
-                {activeFilterCount > 0 && (
-                  <button onClick={resetFilters} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                    <X className="w-3 h-3" /> Reset semua
-                  </button>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Aktivitas</label>
-                <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  value={filters.activity}
-                  onChange={(e) => { setFilters((f) => ({ ...f, activity: e.target.value })); setCurrentPage(1); }}
-                >
-                  <option value="">Semua Aktivitas</option>
-                  <option value="login">Login</option>
-                  <option value="logout">Logout</option>
-                  <option value="register">Register</option>
-                  <option value="create_data">Tambah Data</option>
-                  <option value="update_data">Ubah Data</option>
-                  <option value="delete_data">Hapus Data</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Dari</label>
-                <DatePicker
-                  value={filters.date_from}
-                  onChange={(val) => { setFilters((f) => ({ ...f, date_from: val })); setCurrentPage(1); }}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Sampai</label>
-                <DatePicker
-                  value={filters.date_to}
-                  onChange={(val) => { setFilters((f) => ({ ...f, date_to: val })); setCurrentPage(1); }}
-                />
-              </div>
+        {/* Search + Filter (Right) */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {/* Search */}
+          <div className="relative w-full sm:w-80 md:w-96" ref={filterRef}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              placeholder="Cari user, IP..."
+              className="w-full h-10 pl-9 pr-20 rounded-full border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 shadow-sm"
+              value={searchInput}
+              onChange={(e) => handleSearchInput(e.target.value)}
+            />
+            {searchInput && (
               <button
-                onClick={() => setFilterOpen(false)}
-                className="w-full py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition"
+                className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() => { setSearchInput(""); setSearch(""); setCurrentPage(1); }}
               >
-                Terapkan
+                <X className="w-3.5 h-3.5" />
               </button>
-            </div>
-          )}
+            )}
+
+            <button
+              onClick={() => setFilterOpen((v) => !v)}
+              className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full shadow transition ${
+                activeFilterCount > 0 ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-teal-500 text-white hover:bg-teal-600"
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {filterOpen && (
+              <div className="absolute right-0 top-12 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-700">Filter Log</p>
+                  {activeFilterCount > 0 && (
+                    <button onClick={resetFilters} className="text-xs text-red-500 hover:underline flex items-center gap-1">
+                      <X className="w-3 h-3" /> Reset semua
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Aktivitas</label>
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    value={filters.activity}
+                    onChange={(e) => { setFilters((f) => ({ ...f, activity: e.target.value })); setCurrentPage(1); }}
+                  >
+                    <option value="">Semua Aktivitas</option>
+                    <option value="login">Login</option>
+                    <option value="logout">Logout</option>
+                    <option value="register">Register</option>
+                    <option value="create_data">Tambah Data</option>
+                    <option value="update_data">Ubah Data</option>
+                    <option value="delete_data">Hapus Data</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Dari</label>
+                  <DatePicker
+                    value={filters.date_from}
+                    onChange={(val) => { setFilters((f) => ({ ...f, date_from: val })); setCurrentPage(1); }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Sampai</label>
+                  <DatePicker
+                    value={filters.date_to}
+                    onChange={(val) => { setFilters((f) => ({ ...f, date_to: val })); setCurrentPage(1); }}
+                  />
+                </div>
+                <button
+                  onClick={() => setFilterOpen(false)}
+                  className="w-full py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition"
+                >
+                  Terapkan
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -484,11 +490,18 @@ export default function ActivityLogList() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={8} className="py-16 text-center text-gray-400">Loading...</td></tr>
+              <TableSkeleton columns={8} rows={rowsPerPage} />
             ) : logs.length === 0 ? (
-              <tr><td colSpan={8} className="py-16 text-center text-gray-300">
-                {search || activeFilterCount > 0 ? "Tidak ada data yang cocok" : "Data aktivitas belum tersedia"}
-              </td></tr>
+              <tr>
+                <td colSpan={8} className="p-0">
+                  <EmptyState
+                    variant="table"
+                    title={search || activeFilterCount > 0 ? "Tidak ada data yang cocok" : "Data aktivitas belum tersedia"}
+                    description={search || activeFilterCount > 0 ? "Coba ubah kata kunci pencarian atau filter Anda." : "Data aktivitas akan tampil di sini."}
+                    icon={<ActivitySquare className="w-8 h-8 text-slate-400" />}
+                  />
+                </td>
+              </tr>
             ) : (
               sortedLogs.map((log, idx) => {
                 const isExpanded = expandedRows.has(log.id);

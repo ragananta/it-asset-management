@@ -82,7 +82,7 @@ class ReportController extends Controller
 
                 // Ambil nama-nama karyawan yang sesuai department
                 $matchingNames = collect($karyawanList)
-                    ->filter(fn($k) => ($k['department'] ?? '') === $department)
+                    ->filter(fn($k) => ($k['departemen'] ?? '') === $department)
                     ->pluck('name')
                     ->toArray();
 

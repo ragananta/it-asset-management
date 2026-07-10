@@ -89,4 +89,26 @@ class FonnteService
             );
         }
     }
+
+    public function notifyMaintenanceCompleted(string $phone, string $borrowerName, string $assetName, string $assetCode): void
+    {
+        $this->send($phone,
+            "Halo *{$borrowerName}*,\n\n" .
+            "Maintenance untuk aset yang sedang Anda pinjam telah selesai.\n\n" .
+            "Detail Aset:\n" .
+            "• Nama Aset: *{$assetName}*\n" .
+            "• Kode Aset: *{$assetCode}*\n\n" .
+            "Silakan menghubungi Admin IT apabila memerlukan informasi lebih lanjut.\n\n" .
+            "Terima kasih."
+        );
+
+        if (!empty($this->adminPhone)) {
+            $this->send($this->adminPhone,
+                "🔧 *Maintenance Selesai*\n\n" .
+                "Peminjam: *{$borrowerName}*\n" .
+                "Aset: *{$assetName}* ({$assetCode})\n" .
+                "Status: Selesai"
+            );
+        }
+    }
 }

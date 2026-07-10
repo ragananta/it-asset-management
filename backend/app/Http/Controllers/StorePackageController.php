@@ -290,6 +290,17 @@ class StorePackageController extends Controller
             $storeName = $store ? $store['name'] : $storeCode;
 
             DB::beginTransaction();
+
+            // Clear store assignment on master assets in this store package (never delete the assets themselves)
+            if ($store) {
+                MasterAsset::where('store_id', $store['id'])
+                    ->update([
+                        'store_id' => null,
+                        'store_name' => null,
+                    ]);
+            }
+
+            // Remove asset-to-store mappings (never delete the assets themselves)
             StoreAssetMapping::where('store_code', $storeCode)->delete();
             
             $this->writeLog($request, 'store_package', "Store Package {$storeName} dibersihkan");

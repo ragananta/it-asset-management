@@ -44,10 +44,42 @@ class AssetByEmployeeExport implements FromCollection, WithHeadings, WithMapping
             });
         }
 
-        return $query->orderBy('user_name', 'ASC')
+        $results = $query->orderBy('user_name', 'ASC')
             ->orderBy('assign_date', 'DESC')
             ->orderBy('id', 'DESC')
             ->get();
+
+        // Filter berdasarkan department (cross-reference dengan API karyawan)
+        if ($this->request->filled('department')) {
+            $karyawanService = app(\App\Services\KaryawanService::class);
+            $karyawanList = $karyawanService->getAllActiveKaryawan();
+            $department = $this->request->department;
+
+            // Ambil nama-nama karyawan yang sesuai department
+            $matchingNames = collect($karyawanList)
+                ->filter(fn($k) => ($k['departemen'] ?? '') === $department)
+                ->pluck('name')
+                ->toArray();
+
+            // Filter data hasil query hanya yang namanya cocok
+            $results = $results->filter(function ($item) use ($matchingNames) {
+                return in_array($item->user_name, $matchingNames);
+            })->values();
+        }
+
+        // Apply sorting if provided
+        if ($this->request->filled('sort_by')) {
+            $sortBy = $this->request->sort_by;
+            $sortOrder = strtolower($this->request->get('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+            
+            if ($sortBy === 'user_name') {
+                $results = $sortOrder === 'desc'
+                    ? $results->sortByDesc('user_name', SORT_NATURAL | SORT_FLAG_CASE)
+                    : $results->sortBy('user_name', SORT_NATURAL | SORT_FLAG_CASE);
+            }
+        }
+
+        return $results->values();
     }
 
     public function headings(): array

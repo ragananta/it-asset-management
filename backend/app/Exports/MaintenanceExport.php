@@ -23,11 +23,28 @@ class MaintenanceExport implements FromQuery, WithHeadings, WithMapping, WithSty
 
     public function query()
     {
-        $query = MaintenanceLog::with('asset:id,asset_name,asset_code')
-            ->orderByDesc('date');
+        $query = MaintenanceLog::with('asset:id,asset_name,asset_code');
+
+        $sortBy = $this->request->get('sort_by', 'date');
+        $sortOrder = strtolower($this->request->get('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $allowedSorts = ['date', 'cost', 'pic', 'status', 'created_at', 'updated_at'];
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortOrder);
+            if ($sortBy !== 'id') {
+                $query->orderBy('id', 'desc');
+            }
+        } else {
+            $query->orderByDesc('date')
+                  ->orderByDesc('created_at')
+                  ->orderByDesc('id');
+        }
 
         if ($this->request->filled('status')) {
             $query->where('status', $this->request->status);
+        }
+
+        if ($this->request->filled('pic')) {
+            $query->where('pic', $this->request->pic);
         }
 
         if ($this->request->filled('date_from') && $this->request->filled('date_to')) {

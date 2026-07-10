@@ -645,19 +645,30 @@ class PlotingDeviceController extends Controller
 
     public function destroy(Request $request, $id)
     {
+        DB::beginTransaction();
         try {
             $tas = MasterAsset::find($id);
             if (!$tas) {
+                DB::rollBack();
                 return $this->notFoundResponse('Tas tidak ditemukan');
             }
 
+            // Detach contained child assets from this container (never delete the assets themselves)
             AssetContainer::where('container_asset_id', $id)->delete();
+
+            // Clear store assignment on this container asset
+            $tas->update([
+                'store_id' => null,
+                'store_name' => null,
+            ]);
 
             $this->clearCache();
             $this->writeLog($request, 'delete_data', "Ploting Device mapping untuk Tas '{$tas->asset_name}' ({$tas->asset_code}) berhasil dihapus");
 
+            DB::commit();
             return $this->successResponse(null, 'Ploting device berhasil dihapus');
         } catch (\Exception $e) {
+            DB::rollBack();
             return $this->errorResponse('Terjadi kesalahan: ' . $e->getMessage(), 500);
         }
     }

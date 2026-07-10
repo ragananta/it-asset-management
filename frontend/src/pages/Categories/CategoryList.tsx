@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
-import { Search, Plus, Pencil, Trash2, X, Check, Tag, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, X, Check, Tag, Save, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import TablePagination from "../../components/pagination/TablePagination";
 import { useRowsPerPage } from "../../hooks/useRowsPerPage";
+import TableSkeleton from "../../components/TableSkeleton";
+import EmptyState from "../../components/EmptyState";
 
 interface Category {
   id: number;
@@ -36,6 +38,8 @@ export default function CategoryList() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const initialSearch = searchParams.get("search") || "";
   const [searchInput, setSearchInput] = useState(initialSearch);
@@ -187,7 +191,7 @@ export default function CategoryList() {
 
     const focusTimer = window.setTimeout(() => nameInputRef.current?.focus(), 80);
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestCloseModal();
+      if (e.key === "Escape" && !saving) requestCloseModal();
     };
 
     document.addEventListener("keydown", handleKeyDown);
@@ -196,7 +200,7 @@ export default function CategoryList() {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [modalOpen]);
+  }, [modalOpen, saving]);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,13 +233,14 @@ export default function CategoryList() {
     setModalOpen(false); setEditTarget(null); setForm(emptyForm); setErrors({}); setModalClosing(false);
   };
   const requestCloseModal = () => {
-    if (modalClosing) return;
+    if (saving || modalClosing) return;
     setModalClosing(true);
     window.setTimeout(() => closeModal(), 200);
   };
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
+    if (saving) return;
     const normalizedName = form.name.trim();
     const normalizedForm = {
       ...form,
@@ -258,6 +263,7 @@ export default function CategoryList() {
 
     try {
       setErrors({});
+      setSaving(true);
 
       if (editTarget) {
         await api.put(`/categories/${editTarget.id}`, normalizedForm);
@@ -296,12 +302,15 @@ export default function CategoryList() {
       } else {
         setToast(apiMessage || "Gagal menyimpan kategori");
       }
+    } finally {
+      setSaving(false);
     }
   };
 
   // ── Delete (soft delete) — optimistic update ──────────────────────────────
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
 
     const prevCategories = categories;
     const prevTotal = totalData;
@@ -322,6 +331,8 @@ export default function CategoryList() {
       setCategories(prevCategories);
       setTotalData(prevTotal);
       setToast(err?.response?.data?.message || "Gagal menghapus kategori");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -402,11 +413,18 @@ export default function CategoryList() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={6} className="py-16 text-center text-gray-400">Loading...</td></tr>
+              <TableSkeleton columns={6} rows={rowsPerPage} />
             ) : categories.length === 0 ? (
-              <tr><td colSpan={6} className="py-16 text-center text-gray-300">
-                {search ? "Tidak ada kategori yang cocok" : "Data kategori belum tersedia"}
-              </td></tr>
+              <tr>
+                <td colSpan={6} className="p-0">
+                  <EmptyState
+                    variant="table"
+                    title={search ? "Tidak ada kategori yang cocok" : "Data kategori belum tersedia"}
+                    description={search ? "Coba ubah kata kunci pencarian Anda." : "Data kategori akan tampil di sini."}
+                    icon={<Tag className="w-8 h-8 text-slate-400" />}
+                  />
+                </td>
+              </tr>
             ) : (
               categories.map((cat, idx) => (
                 <tr key={cat.id} className="hover:bg-brand-50/15 transition">
@@ -483,7 +501,8 @@ export default function CategoryList() {
               <button
                 type="button"
                 onClick={requestCloseModal}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+                disabled={saving}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
                 aria-label="Tutup modal"
               >
                 <X className="w-4 h-4" />
@@ -507,7 +526,8 @@ export default function CategoryList() {
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nama Kategori <span className="text-red-500">*</span></label>
                     <input
                       ref={nameInputRef}
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${nameError ? "border-red-400" : "border-gray-200"}`}
+                      disabled={saving}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${nameError ? "border-red-400" : "border-gray-200"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       placeholder="contoh: Laptop"
                       value={form.name}
                       onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors((prev) => ({ ...prev, name: "" })); }}
@@ -519,7 +539,8 @@ export default function CategoryList() {
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Kode <span className="text-red-500">*</span></label>
                     <input
-                      className={`w-full h-12 border rounded-lg px-3 text-sm uppercase focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${codeError ? "border-red-400" : "border-gray-200"}`}
+                      disabled={saving}
+                      className={`w-full h-12 border rounded-lg px-3 text-sm uppercase focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${codeError ? "border-red-400" : "border-gray-200"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
                       placeholder="contoh: CAT-LPT"
                       value={form.code}
                       onChange={(e) => { setForm({ ...form, code: e.target.value.toUpperCase() }); setErrors((prev) => ({ ...prev, code: "" })); }}
@@ -531,7 +552,8 @@ export default function CategoryList() {
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Deskripsi</label>
                     <textarea
-                      className="w-full min-h-[100px] border border-gray-200 rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 resize-y"
+                      disabled={saving}
+                      className="w-full min-h-[100px] border border-gray-200 rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 resize-y disabled:bg-gray-50 disabled:cursor-not-allowed"
                       placeholder="Deskripsi singkat kategori..."
                       rows={3}
                       value={form.description}
@@ -543,8 +565,9 @@ export default function CategoryList() {
                     <label className="text-xs font-semibold text-gray-600">Status Aktif</label>
                     <button
                       type="button"
+                      disabled={saving}
                       onClick={() => setForm({ ...form, is_active: !form.is_active })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-brand-600" : "bg-gray-300"}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-brand-600" : "bg-gray-300"} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_active ? "translate-x-6" : "translate-x-1"}`} />
                     </button>
@@ -558,17 +581,18 @@ export default function CategoryList() {
             <div className="sticky bottom-0 bg-white px-7 py-4 border-t border-[#eef2f7] flex justify-end gap-3 shrink-0">
               <button
                 onClick={requestCloseModal}
-                className="h-10 px-6 rounded-full bg-red-500 hover:bg-red-650 text-white text-sm font-semibold transition shadow-sm"
+                disabled={saving}
+                className="h-10 px-6 rounded-full bg-red-500 hover:bg-red-650 text-white text-sm font-semibold transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Batal
               </button>
               <button
                 onClick={handleSave}
-                disabled={!isFormValid}
+                disabled={saving || !isFormValid}
                 className="h-10 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
-                Simpan
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? "Menyimpan..." : "Simpan"}
               </button>
             </div>
           </div>
@@ -579,7 +603,7 @@ export default function CategoryList() {
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 py-6"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !deleting) setDeleteTarget(null); }}
         >
           <style>{`@keyframes deleteModalIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }`}</style>
           <div
@@ -598,13 +622,18 @@ export default function CategoryList() {
             </div>
             <div className="px-6 pb-6 flex gap-3">
               <button
+                disabled={deleting}
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition"
+                className="flex-1 h-11 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >Batal</button>
               <button
+                disabled={deleting}
                 onClick={handleDelete}
-                className="flex-1 h-11 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition"
-              >Hapus</button>
+                className="flex-1 h-11 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {deleting ? "Menghapus..." : "Hapus"}
+              </button>
             </div>
           </div>
         </div>

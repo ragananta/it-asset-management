@@ -4,11 +4,12 @@ import api from "@/api/axios";
 import {
   Package, CheckCircle, AlertTriangle, Wrench,
   UserCheck, Tag, TrendingUp, Download, RefreshCw, Smartphone, Plus,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, X
 } from "lucide-react";
 import { useKaryawan } from "@/context/KaryawanContext";
 import { fetchAllActiveAssignments, getAssetDistributionByDepartment } from "@/api/dashboardService";
 import { usePolling } from "@/hooks/usePolling";
+import ExportConfirmationModal from "@/components/ExportConfirmationModal";
 
 interface Stats {
   total_assets: number;
@@ -92,20 +93,19 @@ export default function Dashboard() {
   const [loadingAssignments, setLoadingAssignments] = useState(true);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [filterDept, setFilterDept] = useState<"all" | "active" | "borrowed" | "maintenance">("all");
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [expandedDepts, setExpandedDepts] = useState<string[]>([]);
-  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
-
-  const DEPT_FILTER_OPTIONS: { value: "all" | "active" | "borrowed" | "maintenance"; label: string }[] = [
-    { value: "all", label: "Semua Asset" },
-    { value: "active", label: "Asset Bagus" },
-    { value: "borrowed", label: "Asset Dipinjam" },
-    { value: "maintenance", label: "Asset Maintenance" },
-  ];
 
   const [showAllCategoriesDepts, setShowAllCategoriesDepts] = useState<string[]>([]);
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const toggleDeptExpand = (dept: string) => {
     setExpandedDepts((prev) => {
@@ -195,9 +195,10 @@ export default function Dashboard() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      setToast("Data berhasil diekspor.");
     } catch (err) {
       console.error("ERROR export:", err);
-      alert("Gagal export data");
+      setToast("Gagal export data");
     } finally {
       setExporting(false);
     }
@@ -212,8 +213,8 @@ export default function Dashboard() {
   const categoryMax = Math.max(...categoryChart.map((i) => i.value), 1);
 
   const departmentDistribution = useMemo(() => {
-    return getAssetDistributionByDepartment(assignments, karyawanList, filterDept);
-  }, [assignments, karyawanList, filterDept]);
+    return getAssetDistributionByDepartment(assignments, karyawanList, "all");
+  }, [assignments, karyawanList]);
 
   if (loading) {
     return (
@@ -259,12 +260,12 @@ export default function Dashboard() {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button
-            onClick={handleExportAll}
+            onClick={() => setShowExportConfirm(true)}
             disabled={exporting}
             className="flex-1 sm:flex-initial bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 h-10 px-5 rounded-full text-[12px] font-semibold shadow-sm flex items-center justify-center gap-2.5 transition-all duration-300 hover:shadow hover:border-slate-300 hover:text-emerald-600 hover:border-emerald-250 active:scale-95 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            {exporting ? "Menyiapkan..." : "Export Semua Data"}
+            {exporting ? "Mengekspor..." : "Export Semua Data"}
           </button>
         </div>
       </div>
@@ -467,44 +468,6 @@ export default function Dashboard() {
               <TrendingUp className="w-4 h-4 text-emerald-600" />
               <h3 className="text-[18px] font-bold text-slate-800">Persebaran Asset per Departemen</h3>
             </div>
-            
-            <div className="relative w-full sm:w-52">
-              <button
-                type="button"
-                onClick={() => setShowDeptDropdown(!showDeptDropdown)}
-                className="w-full h-9 px-4 flex items-center justify-between rounded-lg border border-gray-200 bg-slate-50 text-[12px] font-semibold text-slate-600 hover:bg-slate-100/70 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/15 transition-all cursor-pointer"
-              >
-                <span>
-                  {DEPT_FILTER_OPTIONS.find((opt) => opt.value === filterDept)?.label}
-                </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${showDeptDropdown ? "rotate-180" : ""}`} />
-              </button>
-
-              {showDeptDropdown && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowDeptDropdown(false)} />
-                  <div className="absolute right-0 mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-25 overflow-hidden divide-y divide-gray-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                    {DEPT_FILTER_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          setFilterDept(opt.value);
-                          setShowDeptDropdown(false);
-                        }}
-                        className={`w-full text-left px-4 py-2.5 text-xs transition hover:bg-slate-50 ${
-                          filterDept === opt.value
-                            ? "bg-emerald-50/50 font-bold text-emerald-700"
-                            : "text-slate-600 font-medium"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
           </div>
 
           {loadingAssignments || loadingKaryawan ? (
@@ -667,6 +630,21 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {/* Toast Alert */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} className="text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+      <ExportConfirmationModal
+        isOpen={showExportConfirm}
+        onClose={() => setShowExportConfirm(false)}
+        onConfirm={handleExportAll}
+      />
     </div>
   );
 }

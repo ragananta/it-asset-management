@@ -23,8 +23,16 @@ class AssetsExport implements FromQuery, WithHeadings, WithMapping, WithStyles, 
 
     public function query()
     {
-        $query = MasterAsset::with('category:id,name')
-            ->orderBy('created_at', 'desc');
+        $query = MasterAsset::with('category:id,name');
+
+        $sortBy = $this->request->get('sort_by', 'created_at');
+        $sortOrder = strtolower($this->request->get('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $allowedSorts = ['asset_code', 'asset_name', 'brand', 'model', 'serial_number', 'condition_status', 'status', 'created_at', 'updated_at'];
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortOrder);
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
 
         if ($this->request->filled('search')) {
             $search = $this->request->search;

@@ -71,6 +71,7 @@ class KaryawanService
             'departemen' => $k['departemen'] ?? '',
             'pos'        => $k['pos'] ?? '',
             'email'      => $k['email'] ?? '',
+            'phone'      => $k['no_hp'] ?? '',
         ], $karyawan);
     }
 }
