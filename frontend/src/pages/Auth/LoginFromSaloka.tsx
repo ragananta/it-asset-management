@@ -20,6 +20,7 @@ export default function LoginFromSaloka() {
 
     const autoLogin = async () => {
       try {
+        // Sesuai dengan Saloka_Intern_Front-main, login dilakukan dengan POST
         const res = await api.post('/auth/login', { email, password });
         
         // Save Sanctum token

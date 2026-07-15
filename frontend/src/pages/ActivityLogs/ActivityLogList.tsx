@@ -9,6 +9,7 @@ import { DatePicker } from "../../components/ui/date-picker";
 import { isListEqual } from "../../utils/equality";
 import TableSkeleton from "../../components/TableSkeleton";
 import EmptyState from "../../components/EmptyState";
+import { SearchableSelect } from "../../components/ui/searchable-select";
 
 interface User {
   id: number;
@@ -354,26 +355,28 @@ export default function ActivityLogList() {
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-gray-700">Filter Log</p>
                   {activeFilterCount > 0 && (
-                    <button onClick={resetFilters} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                      <X className="w-3 h-3" /> Reset semua
-                    </button>
+                    <span className="bg-brand-100 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {activeFilterCount} Aktif
+                    </span>
                   )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Aktivitas</label>
-                  <select
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                    value={filters.activity}
-                    onChange={(e) => { setFilters((f) => ({ ...f, activity: e.target.value })); setCurrentPage(1); }}
-                  >
-                    <option value="">Semua Aktivitas</option>
-                    <option value="login">Login</option>
-                    <option value="logout">Logout</option>
-                    <option value="register">Register</option>
-                    <option value="create_data">Tambah Data</option>
-                    <option value="update_data">Ubah Data</option>
-                    <option value="delete_data">Hapus Data</option>
-                  </select>
+                  <SearchableSelect
+                    value={filters.activity || "all"}
+                    onChange={(val) => { setFilters((f) => ({ ...f, activity: val === "all" ? "" : val })); setCurrentPage(1); }}
+                    placeholder="Semua Aktivitas"
+                    searchPlaceholder="Cari aktivitas..."
+                    options={[
+                      { value: "all", label: "Semua Aktivitas" },
+                      { value: "login", label: "Login" },
+                      { value: "logout", label: "Logout" },
+                      { value: "register", label: "Register" },
+                      { value: "create_data", label: "Tambah Data" },
+                      { value: "update_data", label: "Ubah Data" },
+                      { value: "delete_data", label: "Hapus Data" }
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Tanggal Dari</label>
@@ -389,12 +392,22 @@ export default function ActivityLogList() {
                     onChange={(val) => { setFilters((f) => ({ ...f, date_to: val })); setCurrentPage(1); }}
                   />
                 </div>
-                <button
-                  onClick={() => setFilterOpen(false)}
-                  className="w-full py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition"
-                >
-                  Terapkan
-                </button>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="flex-1 py-2 text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterOpen(false)}
+                    className="flex-1 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                  >
+                    Terapkan
+                  </button>
+                </div>
               </div>
             )}
           </div>

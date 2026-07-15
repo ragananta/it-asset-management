@@ -9,6 +9,7 @@ export interface DatePickerProps {
   className?: string
   required?: boolean
   error?: boolean
+  align?: "left" | "right"
 }
 
 export function DatePicker({
@@ -17,6 +18,7 @@ export function DatePicker({
   placeholder = "Pilih tanggal...",
   className,
   error,
+  align = "left",
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
@@ -206,7 +208,8 @@ export function DatePicker({
       {isOpen && (
         <div
           className={cn(
-            "absolute z-50 mt-2 w-80 bg-white border border-[#e2e8f0] rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.08)] p-4 select-none focus:outline-none transition-all duration-150 origin-top-left scale-100 opacity-100 animate-in fade-in zoom-in-95"
+            "absolute z-50 mt-2 w-[280px] bg-white border border-[#e2e8f0] rounded-2xl shadow-xl shadow-slate-200/50 p-3 select-none focus:outline-none transition-all duration-150 scale-100 opacity-100 animate-in fade-in zoom-in-95",
+            align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left"
           )}
         >
           {/* Header Month Selector */}
@@ -255,7 +258,7 @@ export function DatePicker({
                   type="button"
                   onClick={() => handleSelectDate(date)}
                   className={cn(
-                    "w-9 h-9 flex items-center justify-center text-sm font-medium rounded-xl transition-all duration-150 active:scale-90",
+                    "w-8 h-8 flex items-center justify-center text-[13px] font-medium rounded-lg transition-all duration-150 active:scale-90",
                     isCurrentMonth ? "text-slate-700" : "text-slate-300 opacity-60",
                     today && !selected && "border-2 border-[#10b981] text-[#10b981] font-semibold",
                     selected

@@ -16,8 +16,9 @@ import {
   BarChart3,
   Settings,
   History,
+  LogOut,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "../assets/logo-saloka.png";
 
 interface SidebarProps {
@@ -27,6 +28,12 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
 
   // State to track open dropdown menus
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>(() => {
@@ -241,9 +248,18 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         })}
       </div>
 
-      {/* FOOTER */}
-      <div className="p-4 text-[11px] text-gray-300 text-center tracking-wide">
-        IT Asset Management © {new Date().getFullYear()}
+      {/* LOGOUT & FOOTER */}
+      <div className="mt-auto flex flex-col items-center pb-4 pt-2">
+        <button
+          onClick={handleLogout}
+          title="Logout"
+          className="p-2 mb-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
+        <div className="text-[11px] text-gray-300 text-center tracking-wide">
+          IT Asset Management © {new Date().getFullYear()}
+        </div>
       </div>
 
     </div>

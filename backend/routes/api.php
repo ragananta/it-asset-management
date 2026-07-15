@@ -20,6 +20,9 @@ use App\Http\Controllers\StorePackageController;
 | API Routes - IT Asset Management
 |--------------------------------------------------------------------------
 */
+Route::get('/stores', [\App\Http\Controllers\SatsIntegrationController::class, 'stores']);
+
+
 
 // ═══════════════════════════════════════════════
 // AUTH - Public Routes (tidak perlu token)
@@ -38,6 +41,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me',      [AuthController::class, 'me']);
+        // API khusus dari mentor (Method GET) persis di /auth
+        Route::get('/', [\App\Http\Controllers\SalokaIntegrationController::class, 'ssoLogin'])->withoutMiddleware('auth:sanctum');
     });
 
     // Categories
@@ -125,6 +130,11 @@ Route::prefix('integrations/sats')
     ->group(function () {
         Route::get('/ploting-devices', [\App\Http\Controllers\SatsIntegrationController::class, 'plotingDevices']);
         Route::get('/ploting-devices/scan/{asset_code}', [\App\Http\Controllers\SatsIntegrationController::class, 'scanPlotingDevice']);
+        
+        // Alias specifically for SATS "Bags" logic
+        Route::get('/bags', [\App\Http\Controllers\SatsIntegrationController::class, 'plotingDevices']);
+        Route::get('/bags/{asset_code}', [\App\Http\Controllers\SatsIntegrationController::class, 'scanPlotingDevice']);
+        
         Route::get('/stores', [\App\Http\Controllers\SatsIntegrationController::class, 'stores']);
         Route::get('/store-packages/{store_code}', [\App\Http\Controllers\SatsIntegrationController::class, 'storePackage']);
         Route::get('/assets/lookup/{asset_code}', [\App\Http\Controllers\SatsIntegrationController::class, 'assetLookup']);

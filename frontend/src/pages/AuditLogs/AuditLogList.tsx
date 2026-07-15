@@ -50,7 +50,9 @@ interface MaintenanceLog {
   description: string;
   cost?: number;
   pic?: string;
-  status?: "ongoing" | "completed"; // ← tambah
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface AuditLogItem {
@@ -446,24 +448,43 @@ const buildTimeline = (asset: Asset): TimelineEvent[] => {
   // ── Maintenance dengan status ─────────────────────────────────────────────
   asset.maintenance_logs?.forEach((m) => {
     const isCompleted = m.status === "completed";
+
+    // 1. Event "Maintenance Dimulai"
     events.push({
-      id: `maint-${m.id}`,
-      date: m.date,
+      id: `maint-start-${m.id}`,
+      date: m.created_at || m.date,
       type: "maintenance",
-      title: isCompleted ? "Maintenance Selesai" : "Maintenance / Servis",
+      title: "Maintenance Dimulai",
       description: m.description,
       meta: [
         m.pic && `Teknisi: ${m.pic}`,
-        fmtCurrency(m.cost) && `Biaya: ${fmtCurrency(m.cost)}`,
-        isCompleted ? "✓ Selesai" : "⏳ Berlangsung",
+        "⏳ Sedang Berlangsung"
       ].filter(Boolean).join(" · ") || undefined,
-      icon: isCompleted
-        ? <CheckCircle2 className="w-4 h-4" />
-        : <Wrench className="w-4 h-4" />,
-      color: isCompleted ? "text-teal-600" : "text-orange-600",
-      bg: isCompleted ? "bg-teal-100" : "bg-orange-100",
-      border: isCompleted ? "border-teal-200" : "border-orange-200",
+      icon: <Wrench className="w-4 h-4" />,
+      color: "text-orange-600",
+      bg: "bg-orange-100",
+      border: "border-orange-200",
     });
+
+    // 2. Event "Maintenance Selesai"
+    if (isCompleted) {
+      events.push({
+        id: `maint-end-${m.id}`,
+        date: m.updated_at || m.date,
+        type: "maintenance",
+        title: "Maintenance Selesai",
+        description: m.description,
+        meta: [
+          m.pic && `Teknisi: ${m.pic}`,
+          fmtCurrency(m.cost) && `Biaya: ${fmtCurrency(m.cost)}`,
+          "✓ Selesai"
+        ].filter(Boolean).join(" · ") || undefined,
+        icon: <CheckCircle2 className="w-4 h-4" />,
+        color: "text-teal-600",
+        bg: "bg-teal-100",
+        border: "border-teal-200",
+      });
+    }
   });
 
   asset.audit_logs?.forEach((al) => {

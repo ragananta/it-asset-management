@@ -21,27 +21,73 @@ class SatsIntegrationController extends Controller
      */
     public function plotingDevices(Request $request): JsonResponse
     {
-        $originalResponse = app(PlotingDeviceController::class)->index($request);
-        if ($originalResponse->getStatusCode() !== 200) {
-            return $originalResponse;
+        $categoryId = \Illuminate\Support\Facades\Cache::remember(
+            'category:cat-tas:id',
+            86400,
+            fn() => \App\Models\Category::where('code', 'CAT-TAS')->value('id')
+        );
+
+        $query = \App\Models\MasterAsset::where('category_id', $categoryId)
+            ->with(['containedAssets' => function ($q) {
+                $q->select('id', 'parent_id', 'asset_code', 'asset_name', 'condition_status');
+            }]);
+
+        if ($request->filled('store_id')) {
+            $query->where('store_id', $request->store_id);
         }
 
-        $originalData = $originalResponse->getData(true);
-        $paginated = $originalData['data'] ?? [];
-        $items = $paginated['data'] ?? [];
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('asset_code', 'like', "%{$search}%")
+                  ->orWhere('asset_name', 'like', "%{$search}%")
+                  ->orWhere('store_name', 'like', "%{$search}%");
+            });
+        }
 
-        $transformedItems = collect($items)->map(function ($item) use ($request) {
-            $resource = new SatsBagsResource((object) [
-                'asset_code'       => $item['code'] ?? '',
-                'asset_name'       => $item['name'] ?? '',
-                'store_name'       => $item['store_name'] ?? '-',
-                'status'           => $item['status'] ?? 'available',
-                'condition_status' => null, // logical status already resolved
-            ]);
-            return $resource->toArray($request);
-        })->toArray();
+        $perPage = $request->get('per_page', 15);
+        $bags = $query->paginate($perPage);
 
-        $paginated['data'] = $transformedItems;
+        $transformedItems = $bags->map(function ($bag) {
+            $logicalStatus = 'available';
+            if ($bag->condition_status === 'under_maintenance') {
+                $logicalStatus = 'maintenance';
+            } elseif ($bag->status === 'borrowed') {
+                $logicalStatus = 'borrowed';
+            } elseif ($bag->status === 'disposed') {
+                $logicalStatus = 'lost';
+            }
+
+            return [
+                'barcode'    => $bag->asset_code,
+                'name'       => $bag->asset_name,
+                'store_name' => $bag->store_name ?? '-',
+                'status'     => $logicalStatus,
+                'assets'     => $bag->containedAssets->map(function ($child) {
+                    return [
+                        'asset_code' => $child->asset_code,
+                        'asset_name' => $child->asset_name,
+                        'condition'  => $child->condition_status ?? '-',
+                    ];
+                })->values()->toArray(),
+            ];
+        });
+
+        $paginated = [
+            'current_page' => $bags->currentPage(),
+            'data'         => $transformedItems,
+            'first_page_url' => $bags->url(1),
+            'from'         => $bags->firstItem(),
+            'last_page'    => $bags->lastPage(),
+            'last_page_url' => $bags->url($bags->lastPage()),
+            'links'        => $bags->linkCollection(),
+            'next_page_url' => $bags->nextPageUrl(),
+            'path'         => $bags->path(),
+            'per_page'     => $bags->perPage(),
+            'prev_page_url' => $bags->previousPageUrl(),
+            'to'           => $bags->lastItem(),
+            'total'        => $bags->total(),
+        ];
 
         return $this->successResponse($paginated, 'Ploting devices retrieved successfully.');
     }

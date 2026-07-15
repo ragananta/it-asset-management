@@ -11,6 +11,7 @@ import { isListEqual } from "../../utils/equality";
 import TableSkeleton from "../../components/TableSkeleton";
 import EmptyState from "../../components/EmptyState";
 import ExportConfirmationModal from "../../components/ExportConfirmationModal";
+import { SearchableSelect } from "../../components/ui/searchable-select";
 
 interface Category { id: number; name: string; code: string; }
 interface Asset {
@@ -372,55 +373,71 @@ export default function AssetList() {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-700">Filter Aset</p>
                 {activeFilterCount > 0 && (
-                  <button onClick={resetFilters} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                    <X className="w-3 h-3" /> Reset semua
-                  </button>
+                  <span className="bg-brand-100 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {activeFilterCount} Aktif
+                  </span>
                 )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kategori</label>
-                <select
+                <SearchableSelect
                   disabled={loadingCategories}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 disabled:bg-gray-50 disabled:cursor-wait"
-                  value={filters.category}
-                  onChange={(e) => { setFilters((f) => ({ ...f, category: e.target.value })); setCurrentPage(1); }}
-                >
-                  <option value="">{loadingCategories ? "Memuat..." : "Semua Kategori"}</option>
-                  {categories.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-                </select>
+                  value={filters.category || "all"}
+                  onChange={(val) => { setFilters((f) => ({ ...f, category: val === "all" ? "" : val })); setCurrentPage(1); }}
+                  placeholder={loadingCategories ? "Memuat..." : "Semua Kategori"}
+                  searchPlaceholder="Cari kategori..."
+                  options={[
+                    { value: "all", label: loadingCategories ? "Memuat..." : "Semua Kategori" },
+                    ...categories.map((c) => ({ value: String(c.id), label: c.name }))
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kondisi</label>
-                <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
-                  value={filters.condition}
-                  onChange={(e) => { setFilters((f) => ({ ...f, condition: e.target.value })); setCurrentPage(1); }}
-                >
-                  <option value="">Semua Kondisi</option>
-                  <option value="good">Good</option>
-                  <option value="damaged">Damaged</option>
-                  <option value="under_maintenance">Maintenance</option>
-                </select>
+                <SearchableSelect
+                  value={filters.condition || "all"}
+                  onChange={(val) => { setFilters((f) => ({ ...f, condition: val === "all" ? "" : val })); setCurrentPage(1); }}
+                  placeholder="Semua Kondisi"
+                  searchPlaceholder="Cari kondisi..."
+                  options={[
+                    { value: "all", label: "Semua Kondisi" },
+                    { value: "good", label: "Good" },
+                    { value: "damaged", label: "Damaged" },
+                    { value: "under_maintenance", label: "Maintenance" }
+                  ]}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15"
-                  value={filters.status}
-                  onChange={(e) => { setFilters((f) => ({ ...f, status: e.target.value })); setCurrentPage(1); }}
-                >
-                  <option value="">Semua Status</option>
-                  <option value="active">Aktif</option>
-                  <option value="borrowed">Dipinjam</option>
-                  <option value="disposed">Disposed</option>
-                </select>
+                <SearchableSelect
+                  value={filters.status || "all"}
+                  onChange={(val) => { setFilters((f) => ({ ...f, status: val === "all" ? "" : val })); setCurrentPage(1); }}
+                  placeholder="Semua Status"
+                  searchPlaceholder="Cari status..."
+                  options={[
+                    { value: "all", label: "Semua Status" },
+                    { value: "active", label: "Aktif" },
+                    { value: "borrowed", label: "Dipinjam" },
+                    { value: "disposed", label: "Disposed" }
+                  ]}
+                />
               </div>
-              <button
-                onClick={() => setFilterOpen(false)}
-                className="w-full py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-              >
-                Terapkan
-              </button>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="flex-1 py-2 text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition"
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterOpen(false)}
+                  className="flex-1 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                >
+                  Terapkan
+                </button>
+              </div>
             </div>
           )}
         </div>

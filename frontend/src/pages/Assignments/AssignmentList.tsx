@@ -12,6 +12,7 @@ import { isListEqual } from "../../utils/equality";
 import TableSkeleton from "../../components/TableSkeleton";
 import EmptyState from "../../components/EmptyState";
 import ExportConfirmationModal from "../../components/ExportConfirmationModal";
+import { DatePicker } from "../../components/ui/date-picker";
 
 interface Assignment {
   id: number;
@@ -807,20 +808,23 @@ export default function AssignmentList() {
                   {/* Field: Tgl Pinjam */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tgl Pinjam <span className="text-red-500">*</span></label>
-                    <input type="date"
-                      disabled={saving}
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 ${errors.assign_date ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
-                      value={form.assign_date} onChange={(e) => setForm({ ...form, assign_date: e.target.value })} />
+                    <DatePicker
+                      value={form.assign_date}
+                      onChange={(val) => setForm({ ...form, assign_date: val })}
+                      placeholder="Pilih Tanggal Pinjam..."
+                      error={!!errors.assign_date}
+                    />
                     {errors.assign_date && <p className="text-red-500 text-xs mt-1">{errors.assign_date}</p>}
                   </div>
 
                   {/* Field: Tgl Kembali */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tgl Kembali <span className="text-gray-400 font-normal">(opsional)</span></label>
-                    <input type="date"
-                      disabled={saving}
-                      className="w-full h-12 border border-[#dbe2ea] rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 disabled:bg-gray-50 disabled:cursor-not-allowed"
-                      value={form.return_date} onChange={(e) => setForm({ ...form, return_date: e.target.value })} />
+                    <DatePicker
+                      value={form.return_date || ""}
+                      onChange={(val) => setForm({ ...form, return_date: val })}
+                      placeholder="Pilih Tanggal Kembali..."
+                    />
                   </div>
 
                   {/* Field: Catatan */}

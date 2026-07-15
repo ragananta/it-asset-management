@@ -138,7 +138,7 @@ class AssetAssignmentController extends Controller
                     assetName:    $asset->asset_name,
                     assignDate:   $assignment->assign_date,
                     returnDate:   $assignment->return_date,
-                );
+                )->afterResponse();
             }
 
             return $this->createdResponse($assignment->load('asset'), 'Penugasan aset berhasil ditambahkan');
@@ -191,7 +191,7 @@ class AssetAssignmentController extends Controller
                     assetName:    $assetName,
                     assignDate:   $assignment->assign_date,
                     returnDate:   $request->return_date,
-                );
+                )->afterResponse();
             }
 
             return $this->successResponse($assignment->fresh()->load('asset'), 'Penugasan aset berhasil diperbarui');

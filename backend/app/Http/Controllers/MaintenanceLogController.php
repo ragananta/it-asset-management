@@ -90,12 +90,14 @@ class MaintenanceLogController extends Controller
                 return [
                     'total_cost' => (float) (clone $query)->sum('cost'),
                     'logs' => $query->paginate($perPage),
+                    'pics' => MaintenanceLog::whereNotNull('pic')->where('pic', '!=', '')->distinct()->pluck('pic'),
                 ];
             });
 
             return $this->successResponse([
                 'logs'       => $payload['logs'],
                 'total_cost' => $payload['total_cost'],
+                'pics'       => $payload['pics'],
             ], 'Data maintenance log berhasil diambil');
 
         } catch (\Exception $e) {
@@ -142,9 +144,12 @@ class MaintenanceLogController extends Controller
             }
             $this->clearMaintenanceCache();
 
+            $activityType = $newStatus === 'ongoing' ? 'maintenance_started' : 'maintenance_completed';
+            $actionText = $newStatus === 'ongoing' ? 'dimulai' : 'diselesaikan';
+            
             $this->writeLog(
-                $request, 'create_data',
-                "Maintenance log untuk aset '{$asset->asset_name}' berhasil ditambahkan"
+                $request, $activityType,
+                "Maintenance untuk aset '{$asset->asset_name}' telah {$actionText}"
             );
 
             return $this->createdResponse(
@@ -223,7 +228,7 @@ class MaintenanceLogController extends Controller
                             assignDate: null,
                             returnDate: null,
                             assetCode: $assetCodeStr
-                        );
+                        )->afterResponse();
                     }
                 } catch (\Exception $ex) {
                     \Illuminate\Support\Facades\Log::error('Failed to dispatch maintenance completed notification: ' . $ex->getMessage());
@@ -237,7 +242,13 @@ class MaintenanceLogController extends Controller
             $log->update($request->validated());
             $this->clearMaintenanceCache();
 
-            $this->writeLog($request, 'update_data', "Maintenance log ID {$id} berhasil diperbarui");
+            if ($oldStatus === 'ongoing' && $newStatus === 'completed') {
+                $this->writeLog($request, 'maintenance_completed', "Maintenance untuk aset '{$assetName}' telah selesai");
+            } elseif ($oldStatus === 'completed' && $newStatus === 'ongoing') {
+                $this->writeLog($request, 'maintenance_started', "Maintenance untuk aset '{$assetName}' telah dimulai kembali");
+            } else {
+                $this->writeLog($request, 'update_data', "Data maintenance untuk aset '{$assetName}' diperbarui");
+            }
 
             return $this->successResponse(
                 $log->fresh()->load('asset:id,asset_name,asset_code'),

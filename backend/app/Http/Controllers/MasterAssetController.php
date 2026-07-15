@@ -331,24 +331,44 @@ class MasterAssetController extends Controller
                 ->get()
                 ->each(function ($maintenance) use ($events) {
                     $isCompleted = $maintenance->status === 'completed';
+                    
+                    // 1. Selalu tambahkan event "Maintenance Dimulai"
                     $events->push([
-                        'id'             => "maintenance-{$maintenance->id}",
-                        'event_type'     => $isCompleted ? 'maintenance_completed' : 'maintenance_started',
+                        'id'             => "maintenance-start-{$maintenance->id}",
+                        'event_type'     => 'maintenance_started',
                         'category'       => 'maintenance',
                         'category_label' => 'Maintenance',
-                        'title'          => $isCompleted ? 'Maintenance Selesai' : 'Maintenance Dimulai',
+                        'title'          => 'Maintenance Dimulai',
                         'description'    => $maintenance->description,
                         'created_at'     => optional($maintenance->created_at)->toISOString(),
                         'details'        => [
                             'Teknisi'             => $maintenance->pic,
                             'Catatan'             => $maintenance->description,
-                            'Biaya'               => $maintenance->cost !== null
-                                ? 'Rp' . number_format((float) $maintenance->cost, 0, ',', '.')
-                                : null,
-                            'Tanggal Maintenance' => optional($maintenance->date)->format('d M Y'),
-                            'Status'              => $isCompleted ? 'Selesai' : 'Berlangsung',
+                            'Status'              => 'Berlangsung',
                         ],
                     ]);
+
+                    // 2. Jika sudah selesai, tambahkan event "Maintenance Selesai"
+                    if ($isCompleted) {
+                        $events->push([
+                            'id'             => "maintenance-end-{$maintenance->id}",
+                            'event_type'     => 'maintenance_completed',
+                            'category'       => 'maintenance',
+                            'category_label' => 'Maintenance',
+                            'title'          => 'Maintenance Selesai',
+                            'description'    => $maintenance->description,
+                            'created_at'     => optional($maintenance->updated_at ?? $maintenance->created_at)->toISOString(),
+                            'details'        => [
+                                'Teknisi'             => $maintenance->pic,
+                                'Catatan'             => $maintenance->description,
+                                'Biaya'               => $maintenance->cost !== null
+                                    ? 'Rp' . number_format((float) $maintenance->cost, 0, ',', '.')
+                                    : null,
+                                'Tanggal Maintenance' => optional($maintenance->date)->format('d M Y'),
+                                'Status'              => 'Selesai',
+                            ],
+                        ]);
+                    }
                 });
 
             // ── Audit Logs ─────────────────────────────────────────

@@ -11,6 +11,9 @@ import { isListEqual } from "../../utils/equality";
 import TableSkeleton from "../../components/TableSkeleton";
 import EmptyState from "../../components/EmptyState";
 import ExportConfirmationModal from "../../components/ExportConfirmationModal";
+import { SearchableSelect } from "../../components/ui/searchable-select";
+import { DatePicker } from "../../components/ui/date-picker";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../components/ui/select";
 
 interface Asset {
   id: number;
@@ -535,18 +538,16 @@ export default function MaintenanceList() {
                 {/* PIC Dropdown */}
                 <div className="space-y-1">
                   <label className="block text-xs font-semibold text-gray-500">PIC</label>
-                  <select
-                    className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650 cursor-pointer"
-                    value={tempPic}
-                    onChange={(e) => setTempPic(e.target.value)}
-                  >
-                    <option value="">Semua PIC</option>
-                    {pics.map((picName) => (
-                      <option key={picName} value={picName}>
-                        {picName}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    value={tempPic || "all"}
+                    onChange={(val) => setTempPic(val === "all" ? "" : val)}
+                    placeholder="Semua PIC"
+                    searchPlaceholder="Cari PIC..."
+                    options={[
+                      { value: "all", label: "Semua PIC" },
+                      ...pics.map(picName => ({ value: picName, label: picName }))
+                    ]}
+                  />
                 </div>
 
                 {/* Tanggal Range */}
@@ -554,18 +555,20 @@ export default function MaintenanceList() {
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tanggal</p>
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-gray-500">Dari</label>
-                    <input type="date"
-                      className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650"
+                    <DatePicker
                       value={tempDateFrom}
-                      onChange={(e) => setTempDateFrom(e.target.value)}
+                      onChange={setTempDateFrom}
+                      placeholder="Pilih Tanggal..."
+                      className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="block text-xs font-semibold text-gray-500">Sampai</label>
-                    <input type="date"
-                      className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650"
+                    <DatePicker
                       value={tempDateTo}
-                      onChange={(e) => setTempDateTo(e.target.value)}
+                      onChange={setTempDateTo}
+                      placeholder="Pilih Tanggal..."
+                      className="w-full h-10 border border-gray-200 rounded-lg px-3 text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 bg-slate-50 font-semibold text-slate-650"
                     />
                   </div>
                 </div>
@@ -899,10 +902,13 @@ export default function MaintenanceList() {
                   {/* Field: Tanggal */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-655 mb-1.5">Tanggal <span className="text-red-500">*</span></label>
-                    <input type="date"
-                      disabled={saving}
-                      className={`w-full h-12 border rounded-lg px-3 text-sm focus:outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 transition ${errors.date ? "border-red-400" : "border-[#dbe2ea]"} disabled:bg-gray-50 disabled:cursor-not-allowed`}
-                      value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                    <DatePicker
+                      value={form.date}
+                      onChange={(val) => setForm({ ...form, date: val })}
+                      placeholder="Pilih Tanggal..."
+                      error={!!errors.date}
+                      align="right"
+                    />
                     {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date}</p>}
                   </div>
 

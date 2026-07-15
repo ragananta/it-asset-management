@@ -1,7 +1,7 @@
 import { Suspense, useMemo, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { LogOut, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 
 // ── Decode JWT tanpa library eksternal ──────────────────────────────────────
 function getUserFromToken(): string {
@@ -48,15 +48,9 @@ function InnerPageLoader() {
 
 export default function MainLayout() {
   const location = useLocation();
-  const navigate = useNavigate();
   const userName = useMemo(() => getUserFromToken(), []);
   const pageName = getPageName(location.pathname);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/login");
-  };
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
@@ -101,13 +95,6 @@ export default function MainLayout() {
                 <p className="text-[10px] text-gray-400">Administrator</p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              title="Logout"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
